@@ -53,11 +53,9 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 
 	var text = string.Empty;
 
-	if (messageText.Equals("/start"))
-		text = "Привет, я открываю двери в хату, йоу!";
-	else
-	{
-		text = messageText switch
+	text = messageText.Equals("/start")
+		? "Привет, я открываю двери в хату, йоу!"
+		: messageText switch
 		{
 			"0" => await SendAsync(HouseAuthToken, Doors.Entrance),
 			"1" => await SendAsync(HouseAuthToken, Doors.Main),
@@ -65,7 +63,6 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 			"3" => await SendAsync(HouseAuthToken, Doors.NearParking),
 			_ => "Таких команд я не знаю:(",
 		};
-	}
 
 	Console.WriteLine($"Answer: '{text}'. message in chat {chatId}.");
 
