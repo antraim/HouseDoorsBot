@@ -134,6 +134,7 @@ static class ArgumentExceptionExtention
 
 		return argument;
 	}
+
 	private static void ThrowArgumentNullException(string argumentName, string message)
 			=> throw new ArgumentNullException(argumentName, message);
 
