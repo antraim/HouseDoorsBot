@@ -1,10 +1,14 @@
 ﻿using Refit;
 
+using System.Collections.ObjectModel;
+
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+
+using static System.Net.Mime.MediaTypeNames;
 
 const string HOUSE_API_URL = "HOUSE_API_URL";
 const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
@@ -16,6 +20,14 @@ var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_AUTH_TOKEN, "Environment Variable is null or empty.");
 var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, "Environment Variable is null or empty.");
+
+var CommandDoorsDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
+{
+	{ "0", Doors.Entrance },
+	{ "1", Doors.Main },
+	{ "2", Doors.NearShop },
+	{ "3", Doors.NearParking },
+});
 
 var botClient = new TelegramBotClient(HouseBotAccessToken);
 
@@ -44,31 +56,21 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 {
 	if (update.Message is not { } message)
 		return;
-	if (message.Text is not { } messageText)
+	if (message.Text is not { } command)
 		return;
 
 	var chatId = message.Chat.Id;
 
-	Console.WriteLine($"Received a '{messageText}' message in chat {chatId}.");
+	Console.WriteLine($"Received a '{command}' message in chat {chatId}.");
 
-	var text = string.Empty;
+	var (response, door) = await ExecuteCommandAsync(command);
+	var result = $"{response} - {door}";
 
-	text = messageText.Equals("/start")
-		? "Привет, я открываю двери в хату, йоу!"
-		: messageText switch
-		{
-			"0" => await SendAsync(HouseAuthToken, Doors.Entrance),
-			"1" => await SendAsync(HouseAuthToken, Doors.Main),
-			"2" => await SendAsync(HouseAuthToken, Doors.NearShop),
-			"3" => await SendAsync(HouseAuthToken, Doors.NearParking),
-			_ => "Таких команд я не знаю:(",
-		};
-
-	Console.WriteLine($"Answer: '{text}'. message in chat {chatId}.");
+	Console.WriteLine($"Answer: '{result}'. message in chat {chatId}.");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: chatId,
-		text,
+		result,
 		replyToMessageId: update.Message.MessageId,
 		allowSendingWithoutReply: true,
 		cancellationToken: cancellationToken);
@@ -86,6 +88,18 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	Console.WriteLine(ErrorMessage);
 
 	return Task.CompletedTask;
+}
+
+async Task<Tuple<string, string>> ExecuteCommandAsync(string command)
+{
+	var isExistCommand = CommandDoorsDictionary.TryGetValue(command, out var door);
+	var response = command.Equals("/start")
+		? "Привет, я открываю двери в хату, йоу!"
+		: isExistCommand
+			? await SendAsync(HouseAuthToken, door)
+			: "Такой команды нет:(";
+
+	return new Tuple<string, string>(response, door.ToString());
 }
 
 async Task<string> SendAsync(string token, Doors door)
