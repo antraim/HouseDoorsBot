@@ -64,10 +64,10 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 	var user = $"{message.Chat.FirstName} {message.Chat.LastName} (@{message.Chat.Username})";
 
 	Console.WriteLine($"Received a '{command}' message from {user}, chat {chatId}.");
-	
+
 	var result = await ExecuteCommandAsync(chatId, command);
 
-	Console.WriteLine($"Answer: '{result}'. message to {user}, chat {chatId}.");
+	Console.WriteLine($"Answer: '{result}'. Message to {user}, chat {chatId}.");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: chatId,
@@ -93,38 +93,32 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 
 async Task<string> ExecuteCommandAsync(long chatId, string command)
 {
+	if (command.Equals("/start"))
+		return "Hello:)";
+
 	if (HouseBotUsers is not null)
 		if (!HouseBotUsers.Contains(chatId.ToString()))
 			return "No access";
 
-	var (door, response) = await OpenDoorCommandAsync(command);
-
-	return $"Door ({door}) -> {response}";
-}
-
-async Task<Tuple<string, string>> OpenDoorCommandAsync(string command)
-{
 	var isExistCommand = CommandDoorDictionary.TryGetValue(command, out var door);
-	var response = command.Equals("/start")
-		? "Hello:)"
-		: isExistCommand
-			? await OpenDoorAsync(HouseAuthToken, door)
-			: "There is no such command";
+	var result = isExistCommand
+		? await OpenDoorCommandAsync(door)
+		: "There is no such command";
 
-	return new Tuple<string, string>(door.ToString(), response);
+	return result;
 }
 
-async Task<string> OpenDoorAsync(string token, Doors door)
+async Task<string> OpenDoorCommandAsync(Doors door)
 {
 	var api = RestService.For<IApi>(HouseApiUrl);
 	var requestId = Guid.NewGuid().ToString().ToUpperInvariant(); //3ED00FC0-6E00-00C8-AD5A-8AD0A00A1F00
 
 	try
 	{
-		var result = await api.OpenDoorAsync($"Bearer {token}", requestId, (short)door);
+		var result = await api.OpenDoorAsync($"Bearer {HouseAuthToken}", requestId, (short)door);
 
 		return result.IsSuccessStatusCode
-			? $"Opened [{result.StatusCode.ToString()}]"
+			? $"Door ({door}) is opened [{result.StatusCode.ToString()}]"
 			: $"Error [{result.StatusCode.ToString()}]";
 	}
 	catch (ApiException apiException)
