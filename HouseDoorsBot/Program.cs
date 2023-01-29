@@ -115,7 +115,7 @@ async Task<string> OpenDoorAsync(string token, Doors door)
 
 	try
 	{
-		var result = await api.OpenDoorAsync($"Bearer {token}", requestId, (int)door);
+		var result = await api.OpenDoorAsync($"Bearer {token}", requestId, (short)door);
 
 		return result.IsSuccessStatusCode
 			? $"Opened [{result.StatusCode.ToString()}]"
@@ -127,7 +127,7 @@ async Task<string> OpenDoorAsync(string token, Doors door)
 	}
 }
 
-enum Doors
+enum Doors : short
 {
 	Entrance = 6700,
 	Main = 6701,
@@ -141,7 +141,7 @@ interface IApi
 	Task<IApiResponse> OpenDoorAsync(
 		[Header("Authorization")] string token,
 		[Header("X-Request-Id")] string requestId,
-		int doorId);
+		short doorId);
 }
 
 static class ArgumentExceptionExtention
