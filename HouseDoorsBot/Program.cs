@@ -11,13 +11,14 @@ using Telegram.Bot.Types.Enums;
 const string HOUSE_API_URL = "HOUSE_API_URL";
 const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
 const string HOUSE_BOT_ACCESS_TOKEN = "HOUSE_BOT_ACCESS_TOKEN";
+const string ENVIRONMENT_VARIABLE_ERROR_MESSAGE = "Environment Variable is null or empty.";
 
 var HouseApiUrl = Environment.GetEnvironmentVariable(HOUSE_API_URL)
-	.ThrowIfNullOrWhiteSpace(HOUSE_API_URL, "Environment Variable is null or empty.");
+	.ThrowIfNullOrWhiteSpace(HOUSE_API_URL, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
-	.ThrowIfNullOrWhiteSpace(HOUSE_AUTH_TOKEN, "Environment Variable is null or empty.");
+	.ThrowIfNullOrWhiteSpace(HOUSE_AUTH_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
-	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, "Environment Variable is null or empty.");
+	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 
 var CommandDoorDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
 {
