@@ -1,6 +1,7 @@
 ﻿using Refit;
 
 using System.Collections.ObjectModel;
+using System.Text;
 
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -103,7 +104,7 @@ async Task<string> ExecuteCommandAsync(long chatId, string command)
 	var isExistCommand = CommandDoorDictionary.TryGetValue(command, out var door);
 	var result = isExistCommand
 		? await OpenDoorCommandAsync(door)
-		: "There is no such command";
+		: GetAvailableCommands();
 
 	return result;
 }
@@ -125,6 +126,18 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 	{
 		return $"Exception ({apiException.Message})";
 	}
+}
+
+string GetAvailableCommands()
+{
+	var sb = new StringBuilder();
+
+	sb.AppendLine("Available Commands (just write a number):");
+
+	foreach(var command in CommandDoorDictionary)
+		sb.AppendLine($"{command.Key} - Open {command.Value} door");
+
+	return sb.ToString();
 }
 
 enum Doors : short
