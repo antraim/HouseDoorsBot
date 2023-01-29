@@ -148,7 +148,7 @@ string GetAvailableCommands()
 
 	sb.AppendLine("Available Commands (just write a number):");
 
-	foreach(var command in CommandsDictionary)
+	foreach (var command in CommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
 
 	return sb.ToString();
