@@ -8,8 +8,6 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-using static System.Net.Mime.MediaTypeNames;
-
 const string HOUSE_API_URL = "HOUSE_API_URL";
 const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
 const string HOUSE_BOT_ACCESS_TOKEN = "HOUSE_BOT_ACCESS_TOKEN";
@@ -21,7 +19,7 @@ var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
 var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, "Environment Variable is null or empty.");
 
-var CommandDoorsDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
+var CommandDoorDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
 {
 	{ "0", Doors.Entrance },
 	{ "1", Doors.Main },
@@ -60,13 +58,13 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 		return;
 
 	var chatId = message.Chat.Id;
+	var user = $"{message.Chat.FirstName} {message.Chat.LastName} (@{message.Chat.Username})";
 
-	Console.WriteLine($"Received a '{command}' message in chat {chatId}.");
+	Console.WriteLine($"Received a '{command}' message from {user}, chat {chatId}.");
 
-	var (response, door) = await ExecuteCommandAsync(command);
-	var result = $"{response} - {door}";
+	var result = await ExecuteCommandAsync(command);
 
-	Console.WriteLine($"Answer: '{result}'. message in chat {chatId}.");
+	Console.WriteLine($"Answer: '{result}'. message to {user}, chat {chatId}.");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: chatId,
@@ -90,32 +88,41 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	return Task.CompletedTask;
 }
 
-async Task<Tuple<string, string>> ExecuteCommandAsync(string command)
+async Task<string> ExecuteCommandAsync(string command)
 {
-	var isExistCommand = CommandDoorsDictionary.TryGetValue(command, out var door);
+	var (door, response) = await OpenDoorCommandAsync(command);
+
+	return $"Door ({door}) -> {response}";
+}
+
+async Task<Tuple<string, string>> OpenDoorCommandAsync(string command)
+{
+	var isExistCommand = CommandDoorDictionary.TryGetValue(command, out var door);
 	var response = command.Equals("/start")
 		? "Привет, я открываю двери в хату, йоу!"
 		: isExistCommand
-			? await SendAsync(HouseAuthToken, door)
+			? await OpenDoorAsync(HouseAuthToken, door)
 			: "Такой команды нет:(";
 
-	return new Tuple<string, string>(response, door.ToString());
+	return new Tuple<string, string>(door.ToString(), response);
 }
 
-async Task<string> SendAsync(string token, Doors door)
+async Task<string> OpenDoorAsync(string token, Doors door)
 {
 	var api = RestService.For<IApi>(HouseApiUrl);
 	var requestId = $"3ED{Random.Shared.Next(10, 99)}FC0-6E{Random.Shared.Next(10, 99)}-{Random.Shared.Next(10, 99)}C8-AD5A-8AD0A{Random.Shared.Next(10, 99)}A1F{Random.Shared.Next(10, 99)}";
 
 	try
 	{
-		var result = await api.SendAsync($"Bearer {token}", requestId, (int)door);
+		var result = await api.OpenDoorAsync($"Bearer {token}", requestId, (int)door);
 
-		return result.StatusCode.ToString();
+		return result.IsSuccessStatusCode
+			? $"Opened [{result.StatusCode.ToString()}]"
+			: $"Error [{result.StatusCode.ToString()}]";
 	}
 	catch (ApiException apiException)
 	{
-		return apiException.Message;
+		return $"Exception ({apiException.Message})";
 	}
 }
 
@@ -130,7 +137,7 @@ enum Doors
 interface IApi
 {
 	[Post("/app/devices/{doorId}/open")]
-	Task<IApiResponse> SendAsync(
+	Task<IApiResponse> OpenDoorAsync(
 		[Header("Authorization")] string token,
 		[Header("X-Request-Id")] string requestId,
 		int doorId);
