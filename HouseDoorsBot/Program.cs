@@ -1,4 +1,6 @@
-﻿using Refit;
+﻿using OpenAI_API;
+
+using Refit;
 
 using System.Collections.ObjectModel;
 using System.Text;
@@ -109,6 +111,9 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		if (!HouseBotUsers.Contains(chatId.ToString()))
 			return "No access";
 
+	if (messageText.Equals("/help"))
+		return GetAvailableCommands();
+
 	var isExistCommand = CommandsDictionary.TryGetValue(messageText, out var command);
 
 	if (isExistCommand)
@@ -120,7 +125,7 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 			: "There is no such command";
 	}
 	else
-		return GetAvailableCommands();
+		return await GetResponseFromChatGPTAsync(messageText);
 }
 
 async Task<string> OpenDoorCommandAsync(Doors door)
@@ -142,6 +147,28 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 	}
 }
 
+async Task<string> GetResponseFromChatGPTAsync(string messageText)
+{
+	try
+	{
+		var api = new OpenAIAPI(APIAuthentication.LoadFromEnv());
+
+		return await api.Completions.CreateAndFormatCompletion(
+			new CompletionRequest(
+				messageText,
+				Model.DavinciText,
+				max_tokens: 1000,
+				temperature: 0.9,
+				top_p: 1,
+				presencePenalty: 0.6,
+				frequencyPenalty: 0));
+	}
+	catch (Exception exeption)
+	{
+		return $"Error generating a response from ChatGPT ({exeption.Message})";
+	}
+}
+
 string GetAvailableCommands()
 {
 	var sb = new StringBuilder();
@@ -150,6 +177,8 @@ string GetAvailableCommands()
 
 	foreach (var command in CommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	sb.AppendLine("Or write something to chat with ChatGPT");
 
 	return sb.ToString();
 }
