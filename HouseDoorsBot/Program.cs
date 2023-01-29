@@ -23,12 +23,20 @@ var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TO
 	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 var HouseBotUsers = Environment.GetEnvironmentVariable(HOUSE_BOT_USERS)?.Split(',');
 
-var CommandDoorDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
+var CommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "0", Doors.Entrance },
-	{ "1", Doors.Main },
-	{ "2", Doors.NearShop },
-	{ "3", Doors.NearParking },
+	{ "0", Commands.OpenEntranceDoor },
+	{ "1", Commands.OpenMainDoor },
+	{ "2", Commands.OpenNearShopDoor },
+	{ "3", Commands.OpenNearParkingDoor},
+});
+
+var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
+{
+	{ Commands.OpenEntranceDoor, Doors.Entrance },
+	{ Commands.OpenMainDoor, Doors.Main },
+	{ Commands.OpenNearShopDoor, Doors.NearShop },
+	{ Commands.OpenNearParkingDoor, Doors.NearParking },
 });
 
 var botClient = new TelegramBotClient(HouseBotAccessToken);
@@ -58,15 +66,15 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 {
 	if (update.Message is not { } message)
 		return;
-	if (message.Text is not { } command)
+	if (message.Text is not { } messageText)
 		return;
 
 	var chatId = message.Chat.Id;
 	var user = $"{message.Chat.FirstName} {message.Chat.LastName} (@{message.Chat.Username})";
 
-	Console.WriteLine($"Received a '{command}' message from {user}, chat {chatId}.");
+	Console.WriteLine($"Received a '{messageText}' message from {user}, chat {chatId}.");
 
-	var result = await ExecuteCommandAsync(chatId, command);
+	var result = await ExecuteCommandAsync(chatId, messageText);
 
 	Console.WriteLine($"Answer: '{result}'. Message to {user}, chat {chatId}.");
 
@@ -92,21 +100,27 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	return Task.CompletedTask;
 }
 
-async Task<string> ExecuteCommandAsync(long chatId, string command)
+async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 {
-	if (command.Equals("/start"))
+	if (messageText.Equals("/start"))
 		return "Hello:)";
 
 	if (HouseBotUsers is not null)
 		if (!HouseBotUsers.Contains(chatId.ToString()))
 			return "No access";
 
-	var isExistCommand = CommandDoorDictionary.TryGetValue(command, out var door);
-	var result = isExistCommand
-		? await OpenDoorCommandAsync(door)
-		: GetAvailableCommands();
+	var isExistCommand = CommandsDictionary.TryGetValue(messageText, out var command);
 
-	return result;
+	if (isExistCommand)
+	{
+		var isOpenDoorCommand = CommandDoorDictionary.TryGetValue(command, out var door);
+
+		return isOpenDoorCommand
+			? await OpenDoorCommandAsync(door)
+			: "There is no such command";
+	}
+	else
+		return GetAvailableCommands();
 }
 
 async Task<string> OpenDoorCommandAsync(Doors door)
@@ -134,10 +148,18 @@ string GetAvailableCommands()
 
 	sb.AppendLine("Available Commands (just write a number):");
 
-	foreach(var command in CommandDoorDictionary)
-		sb.AppendLine($"{command.Key} - Open {command.Value} door");
+	foreach(var command in CommandsDictionary)
+		sb.AppendLine($"{command.Key} - {command.Value}");
 
 	return sb.ToString();
+}
+
+enum Commands : byte
+{
+	OpenEntranceDoor,
+	OpenMainDoor,
+	OpenNearShopDoor,
+	OpenNearParkingDoor
 }
 
 enum Doors : short
