@@ -118,8 +118,8 @@ async Task<string> OpenDoorAsync(string token, Doors door)
 		var result = await api.OpenDoorAsync($"Bearer {token}", requestId, (short)door);
 
 		return result.IsSuccessStatusCode
-			? $"Opened [{result.StatusCode.ToString()}]"
-			: $"Error [{result.StatusCode.ToString()}]";
+			? $"Opened [{result.StatusCode}]"
+			: $"Error [{result.StatusCode}]";
 	}
 	catch (ApiException apiException)
 	{
