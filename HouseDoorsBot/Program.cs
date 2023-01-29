@@ -11,6 +11,7 @@ using Telegram.Bot.Types.Enums;
 const string HOUSE_API_URL = "HOUSE_API_URL";
 const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
 const string HOUSE_BOT_ACCESS_TOKEN = "HOUSE_BOT_ACCESS_TOKEN";
+const string HOUSE_BOT_USERS = "HOUSE_BOT_USERS";
 const string ENVIRONMENT_VARIABLE_ERROR_MESSAGE = "Environment Variable is null or empty.";
 
 var HouseApiUrl = Environment.GetEnvironmentVariable(HOUSE_API_URL)
@@ -19,6 +20,7 @@ var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_AUTH_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
+var HouseBotUsers = Environment.GetEnvironmentVariable(HOUSE_BOT_USERS)?.Split(',');
 
 var CommandDoorDictionary = new ReadOnlyDictionary<string, Doors>(new Dictionary<string, Doors>
 {
@@ -62,8 +64,8 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 	var user = $"{message.Chat.FirstName} {message.Chat.LastName} (@{message.Chat.Username})";
 
 	Console.WriteLine($"Received a '{command}' message from {user}, chat {chatId}.");
-
-	var result = await ExecuteCommandAsync(command);
+	
+	var result = await ExecuteCommandAsync(chatId, command);
 
 	Console.WriteLine($"Answer: '{result}'. message to {user}, chat {chatId}.");
 
@@ -89,8 +91,12 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	return Task.CompletedTask;
 }
 
-async Task<string> ExecuteCommandAsync(string command)
+async Task<string> ExecuteCommandAsync(long chatId, string command)
 {
+	if (HouseBotUsers is not null)
+		if (!HouseBotUsers.Contains(chatId.ToString()))
+			return "No access";
+
 	var (door, response) = await OpenDoorCommandAsync(command);
 
 	return $"Door ({door}) -> {response}";
@@ -100,10 +106,10 @@ async Task<Tuple<string, string>> OpenDoorCommandAsync(string command)
 {
 	var isExistCommand = CommandDoorDictionary.TryGetValue(command, out var door);
 	var response = command.Equals("/start")
-		? "Привет, я открываю двери в хату, йоу!"
+		? "Hello:)"
 		: isExistCommand
 			? await OpenDoorAsync(HouseAuthToken, door)
-			: "Такой команды нет:(";
+			: "There is no such command";
 
 	return new Tuple<string, string>(door.ToString(), response);
 }
