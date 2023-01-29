@@ -111,7 +111,7 @@ async Task<Tuple<string, string>> OpenDoorCommandAsync(string command)
 async Task<string> OpenDoorAsync(string token, Doors door)
 {
 	var api = RestService.For<IApi>(HouseApiUrl);
-	var requestId = $"3ED{Random.Shared.Next(10, 99)}FC0-6E{Random.Shared.Next(10, 99)}-{Random.Shared.Next(10, 99)}C8-AD5A-8AD0A{Random.Shared.Next(10, 99)}A1F{Random.Shared.Next(10, 99)}";
+	var requestId = Guid.NewGuid().ToString().ToUpper(); //3ED00FC0-6E00-00C8-AD5A-8AD0A00A1F00
 
 	try
 	{
