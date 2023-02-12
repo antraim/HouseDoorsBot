@@ -1,4 +1,6 @@
 ﻿using OpenAI_API;
+using OpenAI_API.Completions;
+using OpenAI_API.Models;
 
 using Refit;
 
@@ -126,7 +128,7 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 			return await OpenDoorCommandAsync(door);
 
 		if (command is Commands.DeleteCode)
-			return await DeleteCodeCommandAsync(0); // TODO
+			return await DeleteCodeCommandAsync(0);
 
 		return "There is no such command";
 	}
@@ -214,13 +216,13 @@ enum Doors : short
 [Headers("User-Agent: :)")]
 interface IApi
 {
-	[Post("/app/devices/{doorId}/open")]
+	[Post("/v2/app/devices/{doorId}/open")]
 	Task<IApiResponse> OpenDoorAsync(
 		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
 		short doorId);
 
-	[Delete("/app/flats/{flatId}/intercode")]
+	[Delete("/v2/app/flats/{flatId}/intercode")]
 	Task<IApiResponse> DeleteCodeAsync(
 		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
