@@ -229,7 +229,7 @@ interface IApi
 		int flatId);
 }
 
-internal static class TaskExtention
+static class TaskExtention
 {
 	public static async Task<string> HandleExceptionAndGetResult(this Task<IApiResponse> task, Func<IApiResponse, string> func)
 	{
