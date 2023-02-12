@@ -3,6 +3,7 @@
 using Refit;
 
 using System.Collections.ObjectModel;
+using System.Net;
 using System.Text;
 
 using Telegram.Bot;
@@ -31,6 +32,7 @@ var CommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary
 	{ "1", Commands.OpenMainDoor },
 	{ "2", Commands.OpenNearShopDoor },
 	{ "3", Commands.OpenNearParkingDoor},
+	{ "000", Commands.DeleteCode},
 });
 
 var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
@@ -120,9 +122,13 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 	{
 		var isOpenDoorCommand = CommandDoorDictionary.TryGetValue(command, out var door);
 
-		return isOpenDoorCommand
-			? await OpenDoorCommandAsync(door)
-			: "There is no such command";
+		if (isOpenDoorCommand)
+			return await OpenDoorCommandAsync(door);
+
+		if (command is Commands.DeleteCode)
+			return await DeleteCodeCommandAsync(0); // TODO
+
+		return "There is no such command";
 	}
 	else
 		return await GetResponseFromChatGPTAsync(messageText);
@@ -131,21 +137,26 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 async Task<string> OpenDoorCommandAsync(Doors door)
 {
 	var api = RestService.For<IApi>(HouseApiUrl);
-	var requestId = Guid.NewGuid().ToString().ToUpperInvariant(); //3ED00FC0-6E00-00C8-AD5A-8AD0A00A1F00
+	var requestId = GenerateRequestId();
 
-	try
-	{
-		var result = await api.OpenDoorAsync($"Bearer {HouseAuthToken}", requestId, (short)door);
-
-		return result.IsSuccessStatusCode
-			? $"Door ({door}) is opened [{result.StatusCode.ToString()}]"
-			: $"Error [{result.StatusCode.ToString()}]";
-	}
-	catch (ApiException apiException)
-	{
-		return $"Exception ({apiException.Message})";
-	}
+	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
+			.HandleExceptionAndGetResult(it => it.IsSuccessStatusCode
+				? $"Door ({door}) is opened [{it.StatusCode.ToString()}]"
+				: $"Error [{it.StatusCode.ToString()}]");
 }
+
+async Task<string> DeleteCodeCommandAsync(int flatId)
+{
+	var api = RestService.For<IApi>(HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.DeleteCodeAsync(HouseAuthToken, requestId, flatId)
+			.HandleExceptionAndGetResult(it => it.StatusCode is HttpStatusCode.NoContent
+				? $"Code is deleted [{it.StatusCode.ToString()}]"
+				: $"Error [{it.StatusCode.ToString()}]");
+}
+
+string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
 
 async Task<string> GetResponseFromChatGPTAsync(string messageText)
 {
@@ -188,7 +199,8 @@ enum Commands : byte
 	OpenEntranceDoor,
 	OpenMainDoor,
 	OpenNearShopDoor,
-	OpenNearParkingDoor
+	OpenNearParkingDoor,
+	DeleteCode
 }
 
 enum Doors : short
@@ -199,13 +211,37 @@ enum Doors : short
 	NearParking = 14149
 }
 
+[Headers("User-Agent: :)")]
 interface IApi
 {
 	[Post("/app/devices/{doorId}/open")]
 	Task<IApiResponse> OpenDoorAsync(
-		[Header("Authorization")] string token,
+		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
 		short doorId);
+
+	[Delete("/app/flats/{flatId}/intercode")]
+	Task<IApiResponse> DeleteCodeAsync(
+		[Authorize("Bearer")] string token,
+		[Header("X-Request-Id")] string requestId,
+		int flatId);
+}
+
+internal static class TaskExtention
+{
+	public static async Task<string> HandleExceptionAndGetResult(this Task<IApiResponse> task, Func<IApiResponse, string> func)
+	{
+		try
+		{
+			var result = await task;
+
+			return func(result);
+		}
+		catch (ApiException apiException)
+		{
+			return $"Exception ({apiException.Message})";
+		}
+	}
 }
 
 static class ArgumentExceptionExtention
