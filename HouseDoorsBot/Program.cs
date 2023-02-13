@@ -7,6 +7,7 @@ using Refit;
 using System.Collections.ObjectModel;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -34,6 +35,7 @@ var CommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary
 	{ "1", Commands.OpenMainDoor },
 	{ "2", Commands.OpenNearShopDoor },
 	{ "3", Commands.OpenNearParkingDoor},
+	{ "111", Commands.GenerateCode},
 	{ "000", Commands.DeleteCode},
 });
 
@@ -108,6 +110,8 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 
 async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 {
+	const int FlatId = 451352;
+
 	if (messageText.Equals("/start"))
 		return "Hello:)";
 
@@ -127,8 +131,11 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		if (isOpenDoorCommand)
 			return await OpenDoorCommandAsync(door);
 
+		if (command is Commands.GenerateCode)
+			return await GenerateCodeCommandAsync(FlatId);
+
 		if (command is Commands.DeleteCode)
-			return await DeleteCodeCommandAsync(0);
+			return await DeleteCodeCommandAsync(FlatId);
 
 		return "There is no such command";
 	}
@@ -142,9 +149,34 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 	var requestId = GenerateRequestId();
 
 	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
-			.HandleExceptionAndGetResult(it => it.IsSuccessStatusCode
+			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
 				? $"Door ({door}) is opened [{it.StatusCode.ToString()}]"
 				: $"Error [{it.StatusCode.ToString()}]");
+}
+
+async Task<string> GenerateCodeCommandAsync(int flatId)
+{
+	var api = RestService.For<IApi>(HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.GenerateCodeAsync(HouseAuthToken, requestId,
+		new
+		{
+			devices_ids = Array.ConvertAll((Doors[])Enum.GetValues(typeof(Doors)), value => (int)value),
+			flat_id = flatId
+		})
+		.HandleExceptionAndGetStringResult(it =>
+		{
+			if (!it.IsSuccessStatusCode)
+				return $"Error [{it.StatusCode.ToString()}]";
+
+			using var jsonDocument = JsonDocument.Parse(it.Content);
+
+			var isExistData = jsonDocument.RootElement.TryGetProperty("data", out var dataElement);
+			var isExistCode = dataElement.TryGetProperty("code", out var codeElement);
+
+			return $"Code {codeElement.GetString()} is generated [{it.StatusCode.ToString()}]";
+		});
 }
 
 async Task<string> DeleteCodeCommandAsync(int flatId)
@@ -153,7 +185,7 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 	var requestId = GenerateRequestId();
 
 	return await api.DeleteCodeAsync(HouseAuthToken, requestId, flatId)
-			.HandleExceptionAndGetResult(it => it.StatusCode is HttpStatusCode.NoContent
+			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
 				? $"Code is deleted [{it.StatusCode.ToString()}]"
 				: $"Error [{it.StatusCode.ToString()}]");
 }
@@ -202,6 +234,7 @@ enum Commands : byte
 	OpenMainDoor,
 	OpenNearShopDoor,
 	OpenNearParkingDoor,
+	GenerateCode,
 	DeleteCode
 }
 
@@ -217,13 +250,19 @@ enum Doors : short
 interface IApi
 {
 	[Post("/v2/app/devices/{doorId}/open")]
-	Task<IApiResponse> OpenDoorAsync(
+	Task<IApiResponse<string>> OpenDoorAsync(
 		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
 		short doorId);
 
+	[Post("/v3/app/codes/generate")]
+	Task<IApiResponse<string>> GenerateCodeAsync(
+		[Authorize("Bearer")] string token,
+		[Header("X-Request-Id")] string requestId,
+		[Body] object body);
+
 	[Delete("/v2/app/flats/{flatId}/intercode")]
-	Task<IApiResponse> DeleteCodeAsync(
+	Task<IApiResponse<string>> DeleteCodeAsync(
 		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
 		int flatId);
@@ -231,7 +270,7 @@ interface IApi
 
 static class TaskExtention
 {
-	public static async Task<string> HandleExceptionAndGetResult(this Task<IApiResponse> task, Func<IApiResponse, string> func)
+	public static async Task<string> HandleExceptionAndGetStringResult(this Task<IApiResponse<string>> task, Func<IApiResponse<string>, string> func)
 	{
 		try
 		{
