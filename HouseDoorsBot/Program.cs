@@ -150,7 +150,7 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 
 	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
 			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
-				? $"Door ({door}) is opened [{it.StatusCode.ToString()}]"
+				? $"Door ({door}) is opened"
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
@@ -174,8 +174,13 @@ async Task<string> GenerateCodeCommandAsync(int flatId)
 
 			var isExistData = jsonDocument.RootElement.TryGetProperty("data", out var dataElement);
 			var isExistCode = dataElement.TryGetProperty("code", out var codeElement);
+			var isExistExpiresAt = dataElement.TryGetProperty("expires_at", out var expiresAtElement);
+			var sb = new StringBuilder();
 
-			return $"Code {codeElement.GetString()} is generated [{it.StatusCode.ToString()}]";
+			sb.AppendLine($"Code: {codeElement.GetString()}");
+			sb.AppendLine($"Expires at: {DateTime.Parse(expiresAtElement.GetString()).ToString("g")}");
+
+			return sb.ToString();
 		});
 }
 
@@ -186,7 +191,7 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 
 	return await api.DeleteCodeAsync(HouseAuthToken, requestId, flatId)
 			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
-				? $"Code is deleted [{it.StatusCode.ToString()}]"
+				? $"Last code is deleted"
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
