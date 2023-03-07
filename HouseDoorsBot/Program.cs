@@ -19,6 +19,7 @@ const string HOUSE_API_URL = "HOUSE_API_URL";
 const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
 const string HOUSE_BOT_ACCESS_TOKEN = "HOUSE_BOT_ACCESS_TOKEN";
 const string HOUSE_BOT_USERS = "HOUSE_BOT_USERS";
+const string HOUSE_BOT_ADMINS = "HOUSE_BOT_ADMINS";
 const string ENVIRONMENT_VARIABLE_ERROR_MESSAGE = "Environment Variable is null or empty.";
 
 var HouseApiUrl = Environment.GetEnvironmentVariable(HOUSE_API_URL)
@@ -28,15 +29,20 @@ var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
 var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
 	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
 var HouseBotUsers = Environment.GetEnvironmentVariable(HOUSE_BOT_USERS)?.Split(',');
+var HouseBotAdmins = Environment.GetEnvironmentVariable(HOUSE_BOT_ADMINS)?.Split(',');
 
-var CommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
 	{ "0", Commands.OpenEntranceDoor },
 	{ "1", Commands.OpenMainDoor },
 	{ "2", Commands.OpenNearShopDoor },
-	{ "3", Commands.OpenNearParkingDoor},
+	{ "3", Commands.OpenNearParkingDoor}
+});
+
+var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+{
 	{ "111", Commands.GenerateCode},
-	{ "000", Commands.DeleteCode},
+	{ "000", Commands.DeleteCode}
 });
 
 var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
@@ -115,27 +121,34 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 	if (messageText.Equals("/start"))
 		return "Hello:)";
 
-	if (HouseBotUsers is not null)
-		if (!HouseBotUsers.Contains(chatId.ToString()))
-			return "No access";
+	var isAdmin = IsAdmin(chatId);
+	var isUser = IsUser(chatId);
+
+	if (!isAdmin && !isUser)
+		return "No access";
 
 	if (messageText.Equals("/help"))
-		return GetAvailableCommands();
+		return GetAvailableCommands(chatId);
 
-	var isExistCommand = CommandsDictionary.TryGetValue(messageText, out var command);
+	var isExistAdminCommand = AdminCommandsDictionary.TryGetValue(messageText, out var adminCommand);
+	var isExistUserCommand = UserCommandsDictionary.TryGetValue(messageText, out var userCommand);
 
-	if (isExistCommand)
+	if (isAdmin && isExistAdminCommand)
 	{
-		var isOpenDoorCommand = CommandDoorDictionary.TryGetValue(command, out var door);
+		if (adminCommand is Commands.GenerateCode)
+			return await GenerateCodeCommandAsync(FlatId);
+
+		if (adminCommand is Commands.DeleteCode)
+			return await DeleteCodeCommandAsync(FlatId);
+
+		return "There is no such command";
+	}
+	else if (isExistUserCommand)
+	{
+		var isOpenDoorCommand = CommandDoorDictionary.TryGetValue(userCommand, out var door);
 
 		if (isOpenDoorCommand)
 			return await OpenDoorCommandAsync(door);
-
-		if (command is Commands.GenerateCode)
-			return await GenerateCodeCommandAsync(FlatId);
-
-		if (command is Commands.DeleteCode)
-			return await DeleteCodeCommandAsync(FlatId);
 
 		return "There is no such command";
 	}
@@ -143,15 +156,44 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		return await GetResponseFromChatGPTAsync(messageText);
 }
 
-async Task<string> OpenDoorCommandAsync(Doors door)
-{
-	var api = RestService.For<IApi>(HouseApiUrl);
-	var requestId = GenerateRequestId();
+bool IsAdmin(long chatId) => HouseBotAdmins?.Contains(chatId.ToString()) ?? false;
 
-	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
-			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
-				? $"Door ({door}) is opened"
-				: $"Error [{it.StatusCode.ToString()}]");
+bool IsUser(long chatId) => HouseBotUsers?.Contains(chatId.ToString()) ?? false;
+
+string GetAvailableCommands(long chatId)
+	=> IsAdmin(chatId) ? GetAvailableAdminCommands()
+		: IsUser(chatId) ? GetAvailableUserCommands()
+		: "No Available Commands";
+
+string GetAvailableAdminCommands()
+{
+	var sb = new StringBuilder();
+
+	sb.AppendLine("Available Commands (just write a number):");
+
+	foreach (var command in UserCommandsDictionary)
+		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	foreach (var command in AdminCommandsDictionary)
+		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	sb.AppendLine("Or write something to chat with ChatGPT");
+
+	return sb.ToString();
+}
+
+string GetAvailableUserCommands()
+{
+	var sb = new StringBuilder();
+
+	sb.AppendLine("Available Commands (just write a number):");
+
+	foreach (var command in UserCommandsDictionary)
+		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	sb.AppendLine("Or write something to chat with ChatGPT");
+
+	return sb.ToString();
 }
 
 async Task<string> GenerateCodeCommandAsync(int flatId)
@@ -195,6 +237,17 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
+async Task<string> OpenDoorCommandAsync(Doors door)
+{
+	var api = RestService.For<IApi>(HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
+			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
+				? $"Door ({door}) is opened"
+				: $"Error [{it.StatusCode.ToString()}]");
+}
+
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
 
 async Task<string> GetResponseFromChatGPTAsync(string messageText)
@@ -217,20 +270,6 @@ async Task<string> GetResponseFromChatGPTAsync(string messageText)
 	{
 		return $"Error generating a response from ChatGPT ({exeption.Message})";
 	}
-}
-
-string GetAvailableCommands()
-{
-	var sb = new StringBuilder();
-
-	sb.AppendLine("Available Commands (just write a number):");
-
-	foreach (var command in CommandsDictionary)
-		sb.AppendLine($"{command.Key} - {command.Value}");
-
-	sb.AppendLine("Or write something to chat with ChatGPT");
-
-	return sb.ToString();
 }
 
 enum Commands : byte
