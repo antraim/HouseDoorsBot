@@ -120,7 +120,7 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 	const int FlatId = 451352;
 
 	if (messageText.Equals("/start"))
-		return "Hello:)";
+		return $"Hello:) Your ChatId is {chatId}";
 
 	var isAdmin = IsAdmin(chatId);
 	var isUser = IsUser(chatId);
