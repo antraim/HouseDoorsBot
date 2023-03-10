@@ -33,10 +33,11 @@ var HouseBotAdmins = Environment.GetEnvironmentVariable(HOUSE_BOT_ADMINS)?.Split
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "0", Commands.OpenEntranceDoor },
-	{ "1", Commands.OpenMainDoor },
-	{ "2", Commands.OpenNearShopDoor },
-	{ "3", Commands.OpenNearParkingDoor}
+	{ "0", Commands.GetChatId },
+	{ "1", Commands.OpenEntranceDoor },
+	{ "2", Commands.OpenMainDoor },
+	{ "3", Commands.OpenNearShopDoor },
+	{ "4", Commands.OpenNearParkingDoor}
 });
 
 var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
@@ -149,6 +150,9 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 
 		if (isOpenDoorCommand)
 			return await OpenDoorCommandAsync(door);
+
+		if (userCommand is Commands.GetChatId)
+			return $"Your ChatId is {chatId}";
 
 		return "There is no such command";
 	}
@@ -274,6 +278,7 @@ async Task<string> GetResponseFromChatGPTAsync(string messageText)
 
 enum Commands : byte
 {
+	GetChatId,
 	OpenEntranceDoor,
 	OpenMainDoor,
 	OpenNearShopDoor,
