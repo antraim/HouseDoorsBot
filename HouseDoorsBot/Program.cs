@@ -1,8 +1,4 @@
-﻿using OpenAI_API;
-using OpenAI_API.Completions;
-using OpenAI_API.Models;
-
-using Refit;
+﻿using Refit;
 
 using System.Collections.ObjectModel;
 using System.Net;
@@ -118,6 +114,7 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 {
 	const int FlatId = 451352;
+	const string commandNotExistMessage = "There is no such command";
 
 	if (messageText.Equals("/start"))
 		return $"Hello:) Your ChatId is {chatId}";
@@ -142,7 +139,7 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		if (adminCommand is Commands.DeleteCode)
 			return await DeleteCodeCommandAsync(FlatId);
 
-		return "There is no such command";
+		return commandNotExistMessage;
 	}
 	else if (isExistUserCommand)
 	{
@@ -154,10 +151,10 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		if (userCommand is Commands.GetChatId)
 			return $"Your ChatId is {chatId}";
 
-		return "There is no such command";
+		return commandNotExistMessage;
 	}
 	else
-		return await GetResponseFromChatGPTAsync(messageText);
+		return commandNotExistMessage;
 }
 
 bool IsAdmin(long chatId) => HouseBotAdmins?.Contains(chatId.ToString()) ?? false;
@@ -253,28 +250,6 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 }
 
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
-
-async Task<string> GetResponseFromChatGPTAsync(string messageText)
-{
-	try
-	{
-		var api = new OpenAIAPI(APIAuthentication.LoadFromEnv());
-
-		return await api.Completions.CreateAndFormatCompletion(
-			new CompletionRequest(
-				messageText,
-				Model.DavinciText,
-				max_tokens: 1000,
-				temperature: 0.9,
-				top_p: 1,
-				presencePenalty: 0.6,
-				frequencyPenalty: 0));
-	}
-	catch (Exception exeption)
-	{
-		return $"Error generating a response from ChatGPT ({exeption.Message})";
-	}
-}
 
 enum Commands : byte
 {
