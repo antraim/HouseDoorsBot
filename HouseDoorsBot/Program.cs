@@ -17,19 +17,25 @@ var settingsFilePath = Path.Combine(Environment.CurrentDirectory, SETTINGS_FILEN
 
 var Settings = LoadSettings(settingsFilePath);
 
+var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+{
+	{ "111", Commands.GetRequestsToUsers},
+	{ "222", Commands.GenerateCode},
+	{ "333", Commands.DeleteCode}
+});
+
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
 	{ "0", Commands.GetChatId },
-	{ "1", Commands.OpenEntranceDoor },
-	{ "2", Commands.OpenMainDoor },
-	{ "3", Commands.OpenNearShopDoor },
-	{ "4", Commands.OpenNearParkingDoor}
+	{ "11", Commands.OpenEntranceDoor },
+	{ "22", Commands.OpenMainDoor },
+	{ "33", Commands.OpenNearShopDoor },
+	{ "44", Commands.OpenNearParkingDoor}
 });
 
-var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+var GuestCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "111", Commands.GenerateCode},
-	{ "000", Commands.DeleteCode}
+	{ "1", Commands.RequestToUser }
 });
 
 var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
@@ -71,7 +77,20 @@ static Settings LoadSettings(string filePath)
 	var fileText = System.IO.File.ReadAllText(filePath);
 	var settings = JsonSerializer.Deserialize<Settings>(fileText);
 
+	if (settings is not null)
+		settings.FilePath = filePath;
+
 	return settings ?? new();
+}
+
+static void SaveSettings(string filePath, Settings settings)
+{
+	if (!filePath.IsExistFile())
+		throw new FileNotFoundException("Settings file is not found.");
+
+	var updatedSettings = JsonSerializer.Serialize(settings);
+
+	System.IO.File.WriteAllText(filePath, updatedSettings);
 }
 
 async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -81,17 +100,22 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 	if (message.Text is not { } messageText)
 		return;
 
-	var chatId = message.Chat.Id;
-	var user = $"{message.Chat.FirstName} {message.Chat.LastName} (@{message.Chat.Username})";
+	var user = new User
+	{
+		Id = message.Chat.Id,
+		FirstName = message.Chat.FirstName,
+		LastName = message.Chat.LastName,
+		Username = message.Chat.Username
+	};
 
-	Console.WriteLine($"Received a '{messageText}' message from {user}, chat {chatId}.");
+	Console.WriteLine($"Received a '{messageText}' message from {user}, chat {user.Id}.");
 
-	var result = await ExecuteCommandAsync(chatId, messageText);
+	var result = await ExecuteCommandAsync(user, messageText);
 
-	Console.WriteLine($"Answer: '{result}'. Message to {user}, chat {chatId}.");
+	Console.WriteLine($"Answer: '{result}'. Message to {user}, chat {user.Id}.");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
-		chatId: chatId,
+		chatId: user.Id,
 		result,
 		replyToMessageId: update.Message.MessageId,
 		allowSendingWithoutReply: true,
@@ -112,28 +136,29 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	return Task.CompletedTask;
 }
 
-async Task<string> ExecuteCommandAsync(long chatId, string messageText)
+async Task<string> ExecuteCommandAsync(User user, string messageText)
 {
 	const int FlatId = 451352;
 	const string commandNotExistMessage = "There is no such command";
 
 	if (messageText.Equals("/start"))
-		return $"Hello:) Your ChatId is {chatId}";
+		return $"Hello:) Your ChatId is {user.Id}";
 
-	var isAdmin = IsAdmin(chatId);
-	var isUser = IsUser(chatId);
-
-	if (!isAdmin && !isUser)
-		return "No access";
+	var isAdmin = IsAdmin(user.Id);
+	var isUser = IsUser(user.Id);
 
 	if (messageText.Equals("/help"))
-		return GetAvailableCommands(chatId);
+		return GetAvailableCommands(user.Id);
 
 	var isExistAdminCommand = AdminCommandsDictionary.TryGetValue(messageText, out var adminCommand);
 	var isExistUserCommand = UserCommandsDictionary.TryGetValue(messageText, out var userCommand);
+	var isExistGuestCommand = GuestCommandsDictionary.TryGetValue(messageText, out var guestCommand);
 
 	if (isAdmin && isExistAdminCommand)
 	{
+		if (adminCommand is Commands.GetRequestsToUsers)
+			return GetRequestsToUsers();
+
 		if (adminCommand is Commands.GenerateCode)
 			return await GenerateCodeCommandAsync(FlatId);
 
@@ -150,7 +175,14 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 			return await OpenDoorCommandAsync(door);
 
 		if (userCommand is Commands.GetChatId)
-			return $"Your ChatId is {chatId}";
+			return $"Your ChatId is {user.Id}";
+
+		return commandNotExistMessage;
+	}
+	else if (isExistGuestCommand)
+	{
+		if (guestCommand is Commands.RequestToUser)
+			return AddRequestToUsers(user);
 
 		return commandNotExistMessage;
 	}
@@ -165,7 +197,7 @@ bool IsUser(long chatId) => Settings.HouseBotUsers?.Contains(chatId) ?? false;
 string GetAvailableCommands(long chatId)
 	=> IsAdmin(chatId) ? GetAvailableAdminCommands()
 		: IsUser(chatId) ? GetAvailableUserCommands()
-		: "No Available Commands";
+		: GetAvailableGuestCommands();
 
 string GetAvailableAdminCommands()
 {
@@ -189,6 +221,18 @@ string GetAvailableUserCommands()
 	sb.AppendLine("Available Commands (just write a number):");
 
 	foreach (var command in UserCommandsDictionary)
+		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	return sb.ToString();
+}
+
+string GetAvailableGuestCommands()
+{
+	var sb = new StringBuilder();
+
+	sb.AppendLine("Available Commands (just write a number):");
+
+	foreach (var command in GuestCommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
 
 	return sb.ToString();
@@ -246,17 +290,50 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
+string AddRequestToUsers(User user)
+{
+	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
+		return "Request to user is already sended.";
+
+	Settings?.HouseBotRequestsToUsers?.Add(user);
+
+	SaveSettings(Settings?.FilePath, Settings);
+
+	return "Request to user is sended.";
+}
+
+string GetRequestsToUsers()
+{
+	var sb = new StringBuilder();
+
+	if (Settings?.HouseBotRequestsToUsers.Count is 0)
+		sb.AppendLine("Current requests to users is 0.");
+	else
+		sb.AppendLine("Current requests to users:");
+
+	for (var i = 1; i < Settings?.HouseBotRequestsToUsers.Count + 1; i++)
+	{
+		var user = Settings?.HouseBotRequestsToUsers[i - 1];
+
+		sb.AppendLine($"{i} - {user.ToString()}");
+	}
+
+	return sb.ToString();
+}
+
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
 
 enum Commands : byte
 {
+	GenerateCode,
+	DeleteCode,
+	GetRequestsToUsers,
 	GetChatId,
 	OpenEntranceDoor,
 	OpenMainDoor,
 	OpenNearShopDoor,
 	OpenNearParkingDoor,
-	GenerateCode,
-	DeleteCode
+	RequestToUser
 }
 
 enum Doors : short
@@ -328,6 +405,8 @@ static class GlobalExtentions
 
 sealed class Settings
 {
+	public string FilePath { get; set; } = string.Empty;
+
 	public string HouseApiUrl { get; set; } = string.Empty;
 
 	public string HouseAuthToken { get; set; } = string.Empty;
@@ -337,4 +416,36 @@ sealed class Settings
 	public long[] HouseBotAdmins { get; set; } = Array.Empty<long>();
 
 	public long[] HouseBotUsers { get; set; } = Array.Empty<long>();
+
+	public List<User> HouseBotRequestsToUsers { get; set; } = new();
+}
+
+sealed class User: IEquatable<User>
+{
+	public long Id { get; set; }
+
+	public string FirstName { get; set; }
+
+	public string LastName { get; set; }
+
+	public string Username { get; set; }
+
+	public override string ToString() => $"{FirstName} {LastName} @{Username} {Id}";
+
+	public override bool Equals(object? obj)
+	{
+		if (obj is null)
+			return false;
+
+		if (GetType() != obj.GetType())
+			return false;
+
+		return Equals(obj as User);
+	}
+
+	public bool Equals(User other)
+		=> EqualityComparer<long>.Default.Equals(Id, other.Id);
+
+	public override int GetHashCode()
+		=> HashCode.Combine(Id);
 }
