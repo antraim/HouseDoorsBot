@@ -179,8 +179,6 @@ string GetAvailableAdminCommands()
 	foreach (var command in AdminCommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
 
-	sb.AppendLine("Or write something to chat with ChatGPT");
-
 	return sb.ToString();
 }
 
@@ -192,8 +190,6 @@ string GetAvailableUserCommands()
 
 	foreach (var command in UserCommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
-
-	sb.AppendLine("Or write something to chat with ChatGPT");
 
 	return sb.ToString();
 }
