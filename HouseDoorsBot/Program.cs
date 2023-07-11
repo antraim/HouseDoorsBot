@@ -330,7 +330,7 @@ static class GlobalExtentions
 		=> !string.IsNullOrWhiteSpace(filePath) && System.IO.File.Exists(filePath);
 }
 
-class Settings
+sealed class Settings
 {
 	public string HouseApiUrl { get; set; } = string.Empty;
 
