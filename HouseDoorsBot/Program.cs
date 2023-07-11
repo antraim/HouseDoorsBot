@@ -1,6 +1,7 @@
 ﻿using Refit;
 
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -19,9 +20,15 @@ var Settings = LoadSettings(settingsFilePath);
 
 var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "111", Commands.GetRequestsToUsers},
-	{ "222", Commands.GenerateCode},
-	{ "333", Commands.DeleteCode}
+	{ "111", Commands.GenerateCode},
+	{ "222", Commands.DeleteCode},
+	{ "333", Commands.GetUsers},
+	{ "444", Commands.GetRequestsToUsers}
+});
+
+var AdminParameterizedCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+{
+	{ "U+", Commands.AcceptRequestToUsers},
 });
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
@@ -156,14 +163,17 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 
 	if (isAdmin && isExistAdminCommand)
 	{
-		if (adminCommand is Commands.GetRequestsToUsers)
-			return GetRequestsToUsers();
-
 		if (adminCommand is Commands.GenerateCode)
 			return await GenerateCodeCommandAsync(FlatId);
 
 		if (adminCommand is Commands.DeleteCode)
 			return await DeleteCodeCommandAsync(FlatId);
+
+		if (adminCommand is Commands.GetUsers)
+			return GetUsers();
+
+		if (adminCommand is Commands.GetRequestsToUsers)
+			return GetRequestsToUsers();
 
 		return commandNotExistMessage;
 	}
@@ -183,6 +193,28 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 	{
 		if (guestCommand is Commands.RequestToUser)
 			return AddRequestToUsers(user);
+
+		return commandNotExistMessage;
+	}
+	else if (isAdmin)
+	{
+		var message = messageText.Split(' ');
+		var command = message[0];
+		var parameter = message[1];
+		var isExistAdminParameterizedCommand = AdminParameterizedCommandsDictionary.TryGetValue(command, out var adminParameterizedCommand);
+
+		if (!isExistAdminParameterizedCommand)
+			return commandNotExistMessage;
+
+		if (adminParameterizedCommand is Commands.AcceptRequestToUsers)
+		{
+			var isId = int.TryParse(parameter, out var id);
+
+			if (isId)
+				return AcceptRequestToUsers(id);
+			else
+				return commandNotExistMessage;
+		}
 
 		return commandNotExistMessage;
 	}
@@ -279,6 +311,18 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
+string AcceptRequestToUsers(int id)
+{
+	var user = Settings?.HouseBotRequestsToUsers[id];
+
+	Settings?.HouseBotUsers.Add(user.Id);
+	Settings?.HouseBotRequestsToUsers.Remove(user);
+
+	SaveSettings(Settings?.FilePath, Settings);
+
+	return $"Request to users from {user} is accepted.";
+}
+
 async Task<string> OpenDoorCommandAsync(Doors door)
 {
 	var api = RestService.For<IApi>(Settings.HouseApiUrl);
@@ -302,6 +346,25 @@ string AddRequestToUsers(User user)
 	return "Request to user is sended.";
 }
 
+string GetUsers()
+{
+	var sb = new StringBuilder();
+
+	if (Settings?.HouseBotRequestsToUsers.Count is 0)
+		sb.AppendLine("Current users is 0.");
+	else
+		sb.AppendLine("Current users:");
+
+	for (var i = 0; i < Settings?.HouseBotUsers.Count; i++)
+	{
+		var user = Settings?.HouseBotUsers[i];
+
+		sb.AppendLine($"{i} - {user.ToString()}");
+	}
+
+	return sb.ToString();
+}
+
 string GetRequestsToUsers()
 {
 	var sb = new StringBuilder();
@@ -311,9 +374,9 @@ string GetRequestsToUsers()
 	else
 		sb.AppendLine("Current requests to users:");
 
-	for (var i = 1; i < Settings?.HouseBotRequestsToUsers.Count + 1; i++)
+	for (var i = 0; i < Settings?.HouseBotRequestsToUsers.Count; i++)
 	{
-		var user = Settings?.HouseBotRequestsToUsers[i - 1];
+		var user = Settings?.HouseBotRequestsToUsers[i];
 
 		sb.AppendLine($"{i} - {user.ToString()}");
 	}
@@ -327,7 +390,9 @@ enum Commands : byte
 {
 	GenerateCode,
 	DeleteCode,
+	GetUsers,
 	GetRequestsToUsers,
+	AcceptRequestToUsers,
 	GetChatId,
 	OpenEntranceDoor,
 	OpenMainDoor,
@@ -415,7 +480,7 @@ sealed class Settings
 
 	public long[] HouseBotAdmins { get; set; } = Array.Empty<long>();
 
-	public long[] HouseBotUsers { get; set; } = Array.Empty<long>();
+	public List<long> HouseBotUsers { get; set; } = new();
 
 	public List<User> HouseBotRequestsToUsers { get; set; } = new();
 }
