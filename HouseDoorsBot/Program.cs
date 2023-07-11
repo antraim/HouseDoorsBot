@@ -11,21 +11,11 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-const string HOUSE_API_URL = "HOUSE_API_URL";
-const string HOUSE_AUTH_TOKEN = "HOUSE_AUTH_TOKEN";
-const string HOUSE_BOT_ACCESS_TOKEN = "HOUSE_BOT_ACCESS_TOKEN";
-const string HOUSE_BOT_USERS = "HOUSE_BOT_USERS";
-const string HOUSE_BOT_ADMINS = "HOUSE_BOT_ADMINS";
-const string ENVIRONMENT_VARIABLE_ERROR_MESSAGE = "Environment Variable is null or empty.";
+const string SETTINGS_FILENAME = "Settings.json";
 
-var HouseApiUrl = Environment.GetEnvironmentVariable(HOUSE_API_URL)
-	.ThrowIfNullOrWhiteSpace(HOUSE_API_URL, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
-var HouseAuthToken = Environment.GetEnvironmentVariable(HOUSE_AUTH_TOKEN)
-	.ThrowIfNullOrWhiteSpace(HOUSE_AUTH_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
-var HouseBotAccessToken = Environment.GetEnvironmentVariable(HOUSE_BOT_ACCESS_TOKEN)
-	.ThrowIfNullOrWhiteSpace(HOUSE_BOT_ACCESS_TOKEN, ENVIRONMENT_VARIABLE_ERROR_MESSAGE);
-var HouseBotUsers = Environment.GetEnvironmentVariable(HOUSE_BOT_USERS)?.Split(',');
-var HouseBotAdmins = Environment.GetEnvironmentVariable(HOUSE_BOT_ADMINS)?.Split(',');
+var settingsFilePath = Path.Combine(Environment.CurrentDirectory, SETTINGS_FILENAME);
+
+var Settings = LoadSettings(settingsFilePath);
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
@@ -50,7 +40,7 @@ var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictiona
 	{ Commands.OpenNearParkingDoor, Doors.NearParking },
 });
 
-var botClient = new TelegramBotClient(HouseBotAccessToken);
+var botClient = new TelegramBotClient(Settings.HouseBotAccessToken);
 
 ReceiverOptions receiverOptions = new()
 {
@@ -72,6 +62,17 @@ Console.WriteLine($"Start listening for @{me.Username}");
 Console.ReadLine();
 
 cts.Cancel();
+
+static Settings LoadSettings(string filePath)
+{
+	if (!filePath.IsExistFile())
+		throw new FileNotFoundException("Settings file is not found.");
+
+	var fileText = System.IO.File.ReadAllText(filePath);
+	var settings = JsonSerializer.Deserialize<Settings>(fileText);
+
+	return settings ?? new();
+}
 
 async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
 {
@@ -157,9 +158,9 @@ async Task<string> ExecuteCommandAsync(long chatId, string messageText)
 		return commandNotExistMessage;
 }
 
-bool IsAdmin(long chatId) => HouseBotAdmins?.Contains(chatId.ToString()) ?? false;
+bool IsAdmin(long chatId) => Settings?.HouseBotAdmins?.Contains(chatId) ?? false;
 
-bool IsUser(long chatId) => HouseBotUsers?.Contains(chatId.ToString()) ?? false;
+bool IsUser(long chatId) => Settings.HouseBotUsers?.Contains(chatId) ?? false;
 
 string GetAvailableCommands(long chatId)
 	=> IsAdmin(chatId) ? GetAvailableAdminCommands()
@@ -199,10 +200,10 @@ string GetAvailableUserCommands()
 
 async Task<string> GenerateCodeCommandAsync(int flatId)
 {
-	var api = RestService.For<IApi>(HouseApiUrl);
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
 	var requestId = GenerateRequestId();
 
-	return await api.GenerateCodeAsync(HouseAuthToken, requestId,
+	return await api.GenerateCodeAsync(Settings.HouseAuthToken, requestId,
 		new
 		{
 			devices_ids = Array.ConvertAll((Doors[])Enum.GetValues(typeof(Doors)), value => (int)value),
@@ -229,10 +230,10 @@ async Task<string> GenerateCodeCommandAsync(int flatId)
 
 async Task<string> DeleteCodeCommandAsync(int flatId)
 {
-	var api = RestService.For<IApi>(HouseApiUrl);
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
 	var requestId = GenerateRequestId();
 
-	return await api.DeleteCodeAsync(HouseAuthToken, requestId, flatId)
+	return await api.DeleteCodeAsync(Settings.HouseAuthToken, requestId, flatId)
 			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
 				? $"Last code is deleted"
 				: $"Error [{it.StatusCode.ToString()}]");
@@ -240,10 +241,10 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 
 async Task<string> OpenDoorCommandAsync(Doors door)
 {
-	var api = RestService.For<IApi>(HouseApiUrl);
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
 	var requestId = GenerateRequestId();
 
-	return await api.OpenDoorAsync(HouseAuthToken, requestId, (short)door)
+	return await api.OpenDoorAsync(Settings.HouseAuthToken, requestId, (short)door)
 			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
 				? $"Door ({door}) is opened"
 				: $"Error [{it.StatusCode.ToString()}]");
@@ -321,4 +322,23 @@ static class ArgumentExceptionExtention
 
 	private static void ThrowArgumentNullException(string argumentName, string message)
 		=> throw new ArgumentNullException(argumentName, message);
+}
+
+static class GlobalExtentions
+{
+	public static bool IsExistFile(this string filePath)
+		=> !string.IsNullOrWhiteSpace(filePath) && System.IO.File.Exists(filePath);
+}
+
+class Settings
+{
+	public string HouseApiUrl { get; set; } = string.Empty;
+
+	public string HouseAuthToken { get; set; } = string.Empty;
+
+	public string HouseBotAccessToken { get; set; } = string.Empty;
+
+	public long[] HouseBotAdmins { get; set; } = Array.Empty<long>();
+
+	public long[] HouseBotUsers { get; set; } = Array.Empty<long>();
 }
