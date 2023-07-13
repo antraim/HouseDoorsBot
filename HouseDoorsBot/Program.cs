@@ -352,6 +352,9 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 
 string AddRequestToUsers(User user)
 {
+	if (Settings?.HouseBotUsers?.Contains(user) ?? false)
+		return "You are already a user";
+
 	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
 		return "Request to user is already sended";
 
