@@ -1,7 +1,6 @@
 ﻿using Refit;
 
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -20,29 +19,29 @@ var Settings = LoadSettings(settingsFilePath);
 
 var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "111", Commands.GenerateCode},
-	{ "222", Commands.DeleteCode},
-	{ "333", Commands.GetUsers},
-	{ "444", Commands.GetRequestsToUsers}
+	{ "6", Commands.GenerateCode},
+	{ "7", Commands.DeleteCode},
+	{ "8", Commands.GetUsers},
+	{ "9", Commands.GetRequestsToUsers}
 });
 
 var AdminParameterizedCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "U+", Commands.AcceptRequestToUsers},
+	{ "0+", Commands.AcceptRequestToUsers},
 });
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "0", Commands.GetChatId },
-	{ "11", Commands.OpenEntranceDoor },
-	{ "22", Commands.OpenMainDoor },
-	{ "33", Commands.OpenNearShopDoor },
-	{ "44", Commands.OpenNearParkingDoor}
+	{ "1", Commands.GetChatId },
+	{ "2", Commands.OpenEntranceDoor },
+	{ "3", Commands.OpenMainDoor },
+	{ "4", Commands.OpenNearShopDoor },
+	{ "5", Commands.OpenNearParkingDoor}
 });
 
 var GuestCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "1", Commands.RequestToUser }
+	{ "0", Commands.RequestToUser }
 });
 
 var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
@@ -152,7 +151,8 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 async Task<string> ExecuteCommandAsync(User user, string messageText)
 {
 	const int FlatId = 451352;
-	const string commandNotExistMessage = "There is no such command";
+	const string commandNotExistMessage = "There is no such command.";
+	const string incorrectCommandParameterMessage = "Incorrect command parameter.";
 
 	if (messageText.Equals("/start"))
 		return $"Hello:) Your ChatId is {user.Id}";
@@ -183,7 +183,7 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 
 		return commandNotExistMessage;
 	}
-	else if (isExistUserCommand)
+	else if ((isAdmin || isUser) && isExistUserCommand)
 	{
 		var isOpenDoorCommand = CommandDoorDictionary.TryGetValue(userCommand, out var door);
 
@@ -205,6 +205,10 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 	else if (isAdmin)
 	{
 		var message = messageText.Split(' ');
+
+		if (message.Length < 2)
+			return commandNotExistMessage;
+
 		var command = message[0];
 		var parameter = message[1];
 		var isExistAdminParameterizedCommand = AdminParameterizedCommandsDictionary.TryGetValue(command, out var adminParameterizedCommand);
@@ -219,7 +223,7 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 			if (isId)
 				return AcceptRequestToUsers(id);
 			else
-				return commandNotExistMessage;
+				return incorrectCommandParameterMessage;
 		}
 
 		return commandNotExistMessage;
@@ -248,6 +252,9 @@ string GetAvailableAdminCommands()
 
 	foreach (var command in AdminCommandsDictionary)
 		sb.AppendLine($"{command.Key} - {command.Value}");
+
+	foreach (var command in AdminParameterizedCommandsDictionary)
+		sb.AppendLine($"{command.Key} param - {command.Value}");
 
 	return sb.ToString();
 }
