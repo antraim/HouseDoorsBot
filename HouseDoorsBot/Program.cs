@@ -154,13 +154,10 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 	const string commandNotExistMessage = "There is no such command";
 	const string incorrectCommandParameterMessage = "Incorrect command parameter";
 
-	if (messageText.Equals("/start"))
-		return $"Hello:) Your ChatId is {user.Id}";
-
 	var isAdmin = IsAdmin(user);
 	var isUser = IsUser(user);
 
-	if (messageText.Equals("/help"))
+	if (messageText.Equals("/help") || messageText.Equals("/start"))
 		return GetAvailableCommands(user);
 
 	var isExistAdminCommand = AdminCommandsDictionary.TryGetValue(messageText, out var adminCommand);
