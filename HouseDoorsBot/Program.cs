@@ -79,7 +79,11 @@ cts.Cancel();
 static Settings LoadSettings(string filePath)
 {
 	if (!filePath.IsExistFile())
-		throw new FileNotFoundException("Settings file is not found.");
+	{
+		var newSettings = JsonSerializer.Serialize<Settings>(new());
+
+		System.IO.File.WriteAllText(filePath, newSettings);
+	}
 
 	var fileText = System.IO.File.ReadAllText(filePath);
 	var settings = JsonSerializer.Deserialize<Settings>(fileText);
@@ -153,11 +157,11 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 	if (messageText.Equals("/start"))
 		return $"Hello:) Your ChatId is {user.Id}";
 
-	var isAdmin = IsAdmin(user.Id);
-	var isUser = IsUser(user.Id);
+	var isAdmin = IsAdmin(user);
+	var isUser = IsUser(user);
 
 	if (messageText.Equals("/help"))
-		return GetAvailableCommands(user.Id);
+		return GetAvailableCommands(user);
 
 	var isExistAdminCommand = AdminCommandsDictionary.TryGetValue(messageText, out var adminCommand);
 	var isExistUserCommand = UserCommandsDictionary.TryGetValue(messageText, out var userCommand);
@@ -224,13 +228,13 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 		return commandNotExistMessage;
 }
 
-bool IsAdmin(long chatId) => Settings?.HouseBotAdmins?.Contains(chatId) ?? false;
+bool IsAdmin(User user) => Settings?.HouseBotAdmins?.Contains(user) ?? false;
 
-bool IsUser(long chatId) => Settings.HouseBotUsers?.Contains(chatId) ?? false;
+bool IsUser(User user) => Settings.HouseBotUsers?.Contains(user) ?? false;
 
-string GetAvailableCommands(long chatId)
-	=> IsAdmin(chatId) ? GetAvailableAdminCommands()
-		: IsUser(chatId) ? GetAvailableUserCommands()
+string GetAvailableCommands(User user)
+	=> IsAdmin(user) ? GetAvailableAdminCommands()
+		: IsUser(user) ? GetAvailableUserCommands()
 		: GetAvailableGuestCommands();
 
 string GetAvailableAdminCommands()
@@ -317,7 +321,7 @@ string AcceptRequestToUsers(int id)
 {
 	var user = Settings?.HouseBotRequestsToUsers[id];
 
-	Settings?.HouseBotUsers.Add(user.Id);
+	Settings?.HouseBotUsers.Add(user);
 	Settings?.HouseBotRequestsToUsers.Remove(user);
 
 	SaveSettings(Settings?.FilePath, Settings);
@@ -480,9 +484,9 @@ sealed class Settings
 
 	public string HouseBotAccessToken { get; set; } = string.Empty;
 
-	public long[] HouseBotAdmins { get; set; } = Array.Empty<long>();
+	public List<User> HouseBotAdmins { get; set; } = new();
 
-	public List<long> HouseBotUsers { get; set; } = new();
+	public List<User> HouseBotUsers { get; set; } = new();
 
 	public List<User> HouseBotRequestsToUsers { get; set; } = new();
 }
