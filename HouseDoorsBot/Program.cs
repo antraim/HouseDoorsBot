@@ -115,12 +115,12 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 		Username = message.Chat.Username
 	};
 
-	Console.WriteLine($"---------------------------------------------------------------");
-	Console.WriteLine($"{user} => '{messageText}'.");
-
 	var result = await ExecuteCommandAsync(user, messageText);
-
-	Console.WriteLine($"'{result}' => {user}.");
+	
+	Console.WriteLine($"---------------------------------------------------------------");
+	Console.WriteLine($"User => \n{user}");
+	Console.WriteLine($"Message => \n{messageText}");
+	Console.WriteLine($"Answer => \n{result}");
 	Console.WriteLine($"---------------------------------------------------------------");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
@@ -352,7 +352,7 @@ string GetUsers()
 {
 	var sb = new StringBuilder();
 
-	if (Settings?.HouseBotRequestsToUsers.Count is 0)
+	if (Settings?.HouseBotUsers.Count is 0)
 		sb.AppendLine("Current users is 0.");
 	else
 		sb.AppendLine("Current users:");
