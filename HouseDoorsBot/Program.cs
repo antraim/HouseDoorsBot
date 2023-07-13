@@ -96,7 +96,7 @@ static Settings LoadSettings(string filePath)
 static void SaveSettings(string filePath, Settings settings)
 {
 	if (!filePath.IsExistFile())
-		throw new FileNotFoundException("Settings file is not found.");
+		throw new FileNotFoundException("Settings file is not found");
 
 	var updatedSettings = JsonSerializer.Serialize(settings);
 
@@ -151,8 +151,8 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 async Task<string> ExecuteCommandAsync(User user, string messageText)
 {
 	const int FlatId = 451352;
-	const string commandNotExistMessage = "There is no such command.";
-	const string incorrectCommandParameterMessage = "Incorrect command parameter.";
+	const string commandNotExistMessage = "There is no such command";
+	const string incorrectCommandParameterMessage = "Incorrect command parameter";
 
 	if (messageText.Equals("/start"))
 		return $"Hello:) Your ChatId is {user.Id}";
@@ -333,7 +333,7 @@ string AcceptRequestToUsers(int id)
 
 	SaveSettings(Settings?.FilePath, Settings);
 
-	return $"Request to users from {user} is accepted.";
+	return $"Request to users from {user} is accepted";
 }
 
 async Task<string> OpenDoorCommandAsync(Doors door)
@@ -350,13 +350,13 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 string AddRequestToUsers(User user)
 {
 	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
-		return "Request to user is already sended.";
+		return "Request to user is already sended";
 
 	Settings?.HouseBotRequestsToUsers?.Add(user);
 
 	SaveSettings(Settings?.FilePath, Settings);
 
-	return "Request to user is sended.";
+	return "Request to user is sended";
 }
 
 string GetUsers()
@@ -364,7 +364,7 @@ string GetUsers()
 	var sb = new StringBuilder();
 
 	if (Settings?.HouseBotUsers.Count is 0)
-		sb.AppendLine("Current users is 0.");
+		sb.AppendLine("Current users is 0");
 	else
 		sb.AppendLine("Current users:");
 
@@ -383,7 +383,7 @@ string GetRequestsToUsers()
 	var sb = new StringBuilder();
 
 	if (Settings?.HouseBotRequestsToUsers.Count is 0)
-		sb.AppendLine("Current requests to users is 0.");
+		sb.AppendLine("Current requests to users is 0");
 	else
 		sb.AppendLine("Current requests to users:");
 
