@@ -118,7 +118,7 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 		Username = message.Chat.Username
 	};
 
-	var result = await ExecuteCommandAsync(user, messageText);
+	var result = await ExecuteCommandAsync(user, messageText, cancellationToken);
 	
 	Console.WriteLine($"---------------------------------------------------------------");
 	Console.WriteLine($"User => \n{user}");
@@ -148,7 +148,7 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 	return Task.CompletedTask;
 }
 
-async Task<string> ExecuteCommandAsync(User user, string messageText)
+async Task<string> ExecuteCommandAsync(User user, string messageText, CancellationToken cancellationToken)
 {
 	const int FlatId = 451352;
 	const string commandNotExistMessage = "There is no such command";
@@ -221,7 +221,7 @@ async Task<string> ExecuteCommandAsync(User user, string messageText)
 			var isId = int.TryParse(parameter, out var id);
 
 			if (isId)
-				return AcceptRequestToUsers(id);
+				return await AcceptRequestToUsers(id, cancellationToken);
 			else
 				return incorrectCommandParameterMessage;
 		}
@@ -324,7 +324,7 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
-string AcceptRequestToUsers(int id)
+async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationToken)
 {
 	var user = Settings?.HouseBotRequestsToUsers[id];
 
@@ -332,6 +332,12 @@ string AcceptRequestToUsers(int id)
 	Settings?.HouseBotRequestsToUsers.Remove(user);
 
 	SaveSettings(Settings?.FilePath, Settings);
+
+	var sentMessage = await botClient.SendTextMessageAsync(
+		chatId: user.Id,
+		$"Request to users is accepted",
+		allowSendingWithoutReply: true,
+		cancellationToken: cancellationToken);
 
 	return $"Request to users from {user} is accepted";
 }
