@@ -115,11 +115,13 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 		Username = message.Chat.Username
 	};
 
-	Console.WriteLine($"Received a '{messageText}' message from {user}, chat {user.Id}.");
+	Console.WriteLine($"---------------------------------------------------------------");
+	Console.WriteLine($"{user} => '{messageText}'.");
 
 	var result = await ExecuteCommandAsync(user, messageText);
 
-	Console.WriteLine($"Answer: '{result}'. Message to {user}, chat {user.Id}.");
+	Console.WriteLine($"'{result}' => {user}.");
+	Console.WriteLine($"---------------------------------------------------------------");
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: user.Id,
