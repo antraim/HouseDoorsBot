@@ -120,7 +120,7 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 	};
 
 	var result = await ExecuteCommandAsync(user, messageText, cancellationToken);
-	
+
 	Console.WriteLine($"---------------------------------------------------------------");
 	Console.WriteLine($"User => \n{user}");
 	Console.WriteLine($"Message => \n{messageText}");
@@ -528,7 +528,7 @@ sealed class Settings
 	public List<User> HouseBotRequestsToUsers { get; set; } = new();
 }
 
-sealed class User: IEquatable<User>
+sealed class User : IEquatable<User>
 {
 	public long Id { get; set; }
 
