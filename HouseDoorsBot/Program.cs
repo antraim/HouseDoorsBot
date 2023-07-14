@@ -17,18 +17,9 @@ var settingsFilePath = Path.Combine(Environment.CurrentDirectory, SETTINGS_FILEN
 
 var Settings = LoadSettings(settingsFilePath);
 
-var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+var GuestCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "6", Commands.GenerateCode},
-	{ "7", Commands.DeleteCode},
-	{ "8", Commands.GetUsers},
-	{ "9", Commands.GetRequestsToUsers}
-});
-
-var AdminParameterizedCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
-{
-	{ "A", Commands.AcceptRequestToUsers},
-	{ "D", Commands.DeleteFromUsers},
+	{ "0", Commands.RequestToUser }
 });
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
@@ -40,9 +31,18 @@ var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictio
 	{ "5", Commands.OpenNearParkingDoor}
 });
 
-var GuestCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "0", Commands.RequestToUser }
+	{ "6", Commands.GetUsers},
+	{ "7", Commands.GetRequestsToUsers},
+	{ "8", Commands.GenerateCode},
+	{ "9", Commands.DeleteCode}
+});
+
+var AdminParameterizedCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
+{
+	{ "A", Commands.AcceptRequestToUsers},
+	{ "D", Commands.DeleteFromUsers}
 });
 
 var CommandDoorDictionary = new ReadOnlyDictionary<Commands, Doors>(new Dictionary<Commands, Doors>
@@ -296,6 +296,32 @@ string GetAvailableGuestCommands()
 	return sb.ToString();
 }
 
+string AddRequestToUsers(User user)
+{
+	if (Settings.HouseBotUsers.Contains(user))
+		return "You are already a user";
+
+	if (Settings.HouseBotRequestsToUsers.Contains(user))
+		return "Request to user is already sended";
+
+	Settings.HouseBotRequestsToUsers.Add(user);
+
+	SaveSettings(Settings.FilePath, Settings);
+
+	return "Request to user is sended";
+}
+
+async Task<string> OpenDoorCommandAsync(Doors door)
+{
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.OpenDoorAsync(Settings.HouseAuthToken, requestId, (short)door)
+			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
+				? $"Door ({door}) is opened"
+				: $"Error [{it.StatusCode}]");
+}
+
 string GetUsers()
 {
 	var sb = new StringBuilder();
@@ -332,6 +358,47 @@ string GetRequestsToUsers()
 	}
 
 	return sb.ToString();
+}
+
+async Task<string> GenerateCodeCommandAsync(int flatId)
+{
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.GenerateCodeAsync(Settings.HouseAuthToken, requestId,
+		new
+		{
+			devices_ids = Array.ConvertAll((Doors[])Enum.GetValues(typeof(Doors)), value => (int)value),
+			flat_id = flatId
+		})
+		.HandleExceptionAndGetStringResult(it =>
+		{
+			if (!it.IsSuccessStatusCode)
+				return $"Error [{it.StatusCode}]";
+
+			using var jsonDocument = JsonDocument.Parse(it.Content);
+
+			var isExistData = jsonDocument.RootElement.TryGetProperty("data", out var dataElement);
+			var isExistCode = dataElement.TryGetProperty("code", out var codeElement);
+			var isExistExpiresAt = dataElement.TryGetProperty("expires_at", out var expiresAtElement);
+			var sb = new StringBuilder();
+
+			sb.AppendLine($"Code: {codeElement.GetString()}");
+			sb.AppendLine($"Expires at: {DateTime.Parse(expiresAtElement.GetString()).ToString("g")}");
+
+			return sb.ToString();
+		});
+}
+
+async Task<string> DeleteCodeCommandAsync(int flatId)
+{
+	var api = RestService.For<IApi>(Settings.HouseApiUrl);
+	var requestId = GenerateRequestId();
+
+	return await api.DeleteCodeAsync(Settings.HouseAuthToken, requestId, flatId)
+			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
+				? $"Last code is deleted"
+				: $"Error [{it.StatusCode}]");
 }
 
 async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationToken)
@@ -376,89 +443,22 @@ async Task<string> DeleteFromUsers(int id, CancellationToken cancellationToken)
 	return $"{user} has been removed from the users";
 }
 
-string AddRequestToUsers(User user)
-{
-	if (Settings.HouseBotUsers.Contains(user))
-		return "You are already a user";
-
-	if (Settings.HouseBotRequestsToUsers.Contains(user))
-		return "Request to user is already sended";
-
-	Settings.HouseBotRequestsToUsers.Add(user);
-
-	SaveSettings(Settings.FilePath, Settings);
-
-	return "Request to user is sended";
-}
-
-async Task<string> GenerateCodeCommandAsync(int flatId)
-{
-	var api = RestService.For<IApi>(Settings.HouseApiUrl);
-	var requestId = GenerateRequestId();
-
-	return await api.GenerateCodeAsync(Settings.HouseAuthToken, requestId,
-		new
-		{
-			devices_ids = Array.ConvertAll((Doors[])Enum.GetValues(typeof(Doors)), value => (int)value),
-			flat_id = flatId
-		})
-		.HandleExceptionAndGetStringResult(it =>
-		{
-			if (!it.IsSuccessStatusCode)
-				return $"Error [{it.StatusCode}]";
-
-			using var jsonDocument = JsonDocument.Parse(it.Content);
-
-			var isExistData = jsonDocument.RootElement.TryGetProperty("data", out var dataElement);
-			var isExistCode = dataElement.TryGetProperty("code", out var codeElement);
-			var isExistExpiresAt = dataElement.TryGetProperty("expires_at", out var expiresAtElement);
-			var sb = new StringBuilder();
-
-			sb.AppendLine($"Code: {codeElement.GetString()}");
-			sb.AppendLine($"Expires at: {DateTime.Parse(expiresAtElement.GetString()).ToString("g")}");
-
-			return sb.ToString();
-		});
-}
-
-async Task<string> DeleteCodeCommandAsync(int flatId)
-{
-	var api = RestService.For<IApi>(Settings.HouseApiUrl);
-	var requestId = GenerateRequestId();
-
-	return await api.DeleteCodeAsync(Settings.HouseAuthToken, requestId, flatId)
-			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
-				? $"Last code is deleted"
-				: $"Error [{it.StatusCode}]");
-}
-
-async Task<string> OpenDoorCommandAsync(Doors door)
-{
-	var api = RestService.For<IApi>(Settings.HouseApiUrl);
-	var requestId = GenerateRequestId();
-
-	return await api.OpenDoorAsync(Settings.HouseAuthToken, requestId, (short)door)
-			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
-				? $"Door ({door}) is opened"
-				: $"Error [{it.StatusCode}]");
-}
-
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
 
 enum Commands : byte
 {
-	GenerateCode,
-	DeleteCode,
-	GetUsers,
-	GetRequestsToUsers,
-	AcceptRequestToUsers,
-	DeleteFromUsers,
+	RequestToUser,
 	GetChatId,
 	OpenEntranceDoor,
 	OpenMainDoor,
 	OpenNearShopDoor,
 	OpenNearParkingDoor,
-	RequestToUser
+	GetUsers,
+	GetRequestsToUsers,
+	GenerateCode,
+	DeleteCode,
+	AcceptRequestToUsers,
+	DeleteFromUsers
 }
 
 enum Doors : short
