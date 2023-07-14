@@ -405,7 +405,7 @@ async Task<string> GenerateCodeCommandAsync(int flatId)
 		.HandleExceptionAndGetStringResult(it =>
 		{
 			if (!it.IsSuccessStatusCode)
-				return $"Error [{it.StatusCode.ToString()}]";
+				return $"Error [{it.StatusCode}]";
 
 			using var jsonDocument = JsonDocument.Parse(it.Content);
 
@@ -429,7 +429,7 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 	return await api.DeleteCodeAsync(Settings.HouseAuthToken, requestId, flatId)
 			.HandleExceptionAndGetStringResult(it => it.StatusCode is HttpStatusCode.NoContent
 				? $"Last code is deleted"
-				: $"Error [{it.StatusCode.ToString()}]");
+				: $"Error [{it.StatusCode}]");
 }
 
 async Task<string> OpenDoorCommandAsync(Doors door)
@@ -440,7 +440,7 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 	return await api.OpenDoorAsync(Settings.HouseAuthToken, requestId, (short)door)
 			.HandleExceptionAndGetStringResult(it => it.IsSuccessStatusCode
 				? $"Door ({door}) is opened"
-				: $"Error [{it.StatusCode.ToString()}]");
+				: $"Error [{it.StatusCode}]");
 }
 
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
