@@ -27,7 +27,8 @@ var AdminCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dicti
 
 var AdminParameterizedCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
 {
-	{ "0+", Commands.AcceptRequestToUsers},
+	{ "A", Commands.AcceptRequestToUsers},
+	{ "D", Commands.DeleteFromUsers},
 });
 
 var UserCommandsDictionary = new ReadOnlyDictionary<string, Commands>(new Dictionary<string, Commands>
@@ -223,6 +224,16 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 				return incorrectCommandParameterMessage;
 		}
 
+		if (adminParameterizedCommand is Commands.DeleteFromUsers)
+		{
+			var isId = int.TryParse(parameter, out var id);
+
+			if (isId)
+				return await DeleteFromUsers(id, cancellationToken);
+			else
+				return incorrectCommandParameterMessage;
+		}
+
 		return commandNotExistMessage;
 	}
 	else
@@ -280,6 +291,92 @@ string GetAvailableGuestCommands()
 	return sb.ToString();
 }
 
+string GetUsers()
+{
+	var sb = new StringBuilder();
+
+	if (Settings?.HouseBotUsers.Count is 0)
+		sb.AppendLine("Current users is 0");
+	else
+		sb.AppendLine("Current users:");
+
+	for (var i = 0; i < Settings?.HouseBotUsers.Count; i++)
+	{
+		var user = Settings?.HouseBotUsers[i];
+
+		sb.AppendLine($"{i} - {user.ToString()}");
+	}
+
+	return sb.ToString();
+}
+
+string GetRequestsToUsers()
+{
+	var sb = new StringBuilder();
+
+	if (Settings?.HouseBotRequestsToUsers.Count is 0)
+		sb.AppendLine("Current requests to users is 0");
+	else
+		sb.AppendLine("Current requests to users:");
+
+	for (var i = 0; i < Settings?.HouseBotRequestsToUsers.Count; i++)
+	{
+		var user = Settings?.HouseBotRequestsToUsers[i];
+
+		sb.AppendLine($"{i} - {user.ToString()}");
+	}
+
+	return sb.ToString();
+}
+
+async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationToken)
+{
+	var user = Settings?.HouseBotRequestsToUsers[id];
+
+	Settings?.HouseBotUsers.Add(user);
+	Settings?.HouseBotRequestsToUsers.Remove(user);
+
+	SaveSettings(Settings?.FilePath, Settings);
+
+	var sentMessage = await botClient.SendTextMessageAsync(
+		chatId: user.Id,
+		$"Request to users is accepted",
+		allowSendingWithoutReply: true,
+		cancellationToken: cancellationToken);
+
+	return $"Request to users from {user} is accepted";
+}
+
+async Task<string> DeleteFromUsers(int id, CancellationToken cancellationToken)
+{
+	var user = Settings?.HouseBotUsers[id];
+
+	Settings?.HouseBotUsers.Remove(user);
+	Settings?.HouseBotRequestsToUsers.Remove(user);
+
+	SaveSettings(Settings?.FilePath, Settings);
+
+	var sentMessage = await botClient.SendTextMessageAsync(
+		chatId: user.Id,
+		$"You have been removed from users",
+		allowSendingWithoutReply: true,
+		cancellationToken: cancellationToken);
+
+	return $"{user} has been removed from the users";
+}
+
+string AddRequestToUsers(User user)
+{
+	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
+		return "Request to user is already sended";
+
+	Settings?.HouseBotRequestsToUsers?.Add(user);
+
+	SaveSettings(Settings?.FilePath, Settings);
+
+	return "Request to user is sended";
+}
+
 async Task<string> GenerateCodeCommandAsync(int flatId)
 {
 	var api = RestService.For<IApi>(Settings.HouseApiUrl);
@@ -321,24 +418,6 @@ async Task<string> DeleteCodeCommandAsync(int flatId)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
-async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationToken)
-{
-	var user = Settings?.HouseBotRequestsToUsers[id];
-
-	Settings?.HouseBotUsers.Add(user);
-	Settings?.HouseBotRequestsToUsers.Remove(user);
-
-	SaveSettings(Settings?.FilePath, Settings);
-
-	var sentMessage = await botClient.SendTextMessageAsync(
-		chatId: user.Id,
-		$"Request to users is accepted",
-		allowSendingWithoutReply: true,
-		cancellationToken: cancellationToken);
-
-	return $"Request to users from {user} is accepted";
-}
-
 async Task<string> OpenDoorCommandAsync(Doors door)
 {
 	var api = RestService.For<IApi>(Settings.HouseApiUrl);
@@ -350,56 +429,6 @@ async Task<string> OpenDoorCommandAsync(Doors door)
 				: $"Error [{it.StatusCode.ToString()}]");
 }
 
-string AddRequestToUsers(User user)
-{
-	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
-		return "Request to user is already sended";
-
-	Settings?.HouseBotRequestsToUsers?.Add(user);
-
-	SaveSettings(Settings?.FilePath, Settings);
-
-	return "Request to user is sended";
-}
-
-string GetUsers()
-{
-	var sb = new StringBuilder();
-
-	if (Settings?.HouseBotUsers.Count is 0)
-		sb.AppendLine("Current users is 0");
-	else
-		sb.AppendLine("Current users:");
-
-	for (var i = 0; i < Settings?.HouseBotUsers.Count; i++)
-	{
-		var user = Settings?.HouseBotUsers[i];
-
-		sb.AppendLine($"{i} - {user.ToString()}");
-	}
-
-	return sb.ToString();
-}
-
-string GetRequestsToUsers()
-{
-	var sb = new StringBuilder();
-
-	if (Settings?.HouseBotRequestsToUsers.Count is 0)
-		sb.AppendLine("Current requests to users is 0");
-	else
-		sb.AppendLine("Current requests to users:");
-
-	for (var i = 0; i < Settings?.HouseBotRequestsToUsers.Count; i++)
-	{
-		var user = Settings?.HouseBotRequestsToUsers[i];
-
-		sb.AppendLine($"{i} - {user.ToString()}");
-	}
-
-	return sb.ToString();
-}
-
 string GenerateRequestId() => Guid.NewGuid().ToString().ToUpperInvariant();
 
 enum Commands : byte
@@ -409,6 +438,7 @@ enum Commands : byte
 	GetUsers,
 	GetRequestsToUsers,
 	AcceptRequestToUsers,
+	DeleteFromUsers,
 	GetChatId,
 	OpenEntranceDoor,
 	OpenMainDoor,
