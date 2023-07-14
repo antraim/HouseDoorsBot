@@ -218,20 +218,14 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 		{
 			var isId = int.TryParse(parameter, out var id);
 
-			if (isId)
-				return await AcceptRequestToUsers(id, cancellationToken);
-			else
-				return incorrectCommandParameterMessage;
+			return isId ? await AcceptRequestToUsers(id, cancellationToken) : incorrectCommandParameterMessage;
 		}
 
 		if (adminParameterizedCommand is Commands.DeleteFromUsers)
 		{
 			var isId = int.TryParse(parameter, out var id);
 
-			if (isId)
-				return await DeleteFromUsers(id, cancellationToken);
-			else
-				return incorrectCommandParameterMessage;
+			return isId ? await DeleteFromUsers(id, cancellationToken) : incorrectCommandParameterMessage;
 		}
 
 		return commandNotExistMessage;
