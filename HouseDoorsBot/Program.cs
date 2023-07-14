@@ -378,13 +378,13 @@ async Task<string> DeleteFromUsers(int id, CancellationToken cancellationToken)
 
 string AddRequestToUsers(User user)
 {
-	if (Settings.HouseBotUsers?.Contains(user) ?? false)
+	if (Settings.HouseBotUsers.Contains(user))
 		return "You are already a user";
 
-	if (Settings.HouseBotRequestsToUsers?.Contains(user) ?? false)
+	if (Settings.HouseBotRequestsToUsers.Contains(user))
 		return "Request to user is already sended";
 
-	Settings.HouseBotRequestsToUsers?.Add(user);
+	Settings.HouseBotRequestsToUsers.Add(user);
 
 	SaveSettings(Settings.FilePath, Settings);
 
@@ -568,8 +568,8 @@ sealed class User : IEquatable<User>
 		return Equals(obj as User);
 	}
 
-	public bool Equals(User other)
-		=> EqualityComparer<long>.Default.Equals(Id, other.Id);
+	public bool Equals(User? other)
+		=> EqualityComparer<long>.Default.Equals(Id, other?.Id ?? default);
 
 	public override int GetHashCode()
 		=> HashCode.Combine(Id);
