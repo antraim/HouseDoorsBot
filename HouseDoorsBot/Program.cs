@@ -90,8 +90,19 @@ static Settings LoadSettings(string filePath)
 
 	if (settings is not null)
 		settings.FilePath = filePath;
+	else
+		throw new FileNotFoundException(filePath);
 
-	return settings ?? new();
+	if (string.IsNullOrWhiteSpace(settings.HouseApiUrl))
+		throw new InvalidDataException($"{nameof(settings.HouseApiUrl)} is null or whitespace => {filePath}");
+
+	if (string.IsNullOrWhiteSpace(settings.HouseAuthToken))
+		throw new InvalidDataException($"{nameof(settings.HouseAuthToken)} is null or whitespace => {filePath}");
+
+	if (string.IsNullOrWhiteSpace(settings.HouseBotAccessToken))
+		throw new InvalidDataException($"{nameof(settings.HouseBotAccessToken)} is null or whitespace => {filePath}");
+
+	return settings;
 }
 
 static void SaveSettings(string filePath, Settings settings)
@@ -234,9 +245,9 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 		return commandNotExistMessage;
 }
 
-bool IsAdmin(User user) => Settings?.HouseBotAdmins?.Contains(user) ?? false;
+bool IsAdmin(User user) => Settings.HouseBotAdmins.Contains(user);
 
-bool IsUser(User user) => Settings.HouseBotUsers?.Contains(user) ?? false;
+bool IsUser(User user) => Settings.HouseBotUsers.Contains(user);
 
 string GetAvailableCommands(User user)
 	=> IsAdmin(user) ? GetAvailableAdminCommands()
@@ -289,14 +300,14 @@ string GetUsers()
 {
 	var sb = new StringBuilder();
 
-	if (Settings?.HouseBotUsers.Count is 0)
+	if (Settings.HouseBotUsers.Count is 0)
 		sb.AppendLine("Current users is 0");
 	else
 		sb.AppendLine("Current users:");
 
-	for (var i = 0; i < Settings?.HouseBotUsers.Count; i++)
+	for (var i = 0; i < Settings.HouseBotUsers.Count; i++)
 	{
-		var user = Settings?.HouseBotUsers[i];
+		var user = Settings.HouseBotUsers[i];
 
 		sb.AppendLine($"{i} - {user.ToString()}");
 	}
@@ -308,14 +319,14 @@ string GetRequestsToUsers()
 {
 	var sb = new StringBuilder();
 
-	if (Settings?.HouseBotRequestsToUsers.Count is 0)
+	if (Settings.HouseBotRequestsToUsers.Count is 0)
 		sb.AppendLine("Current requests to users is 0");
 	else
 		sb.AppendLine("Current requests to users:");
 
-	for (var i = 0; i < Settings?.HouseBotRequestsToUsers.Count; i++)
+	for (var i = 0; i < Settings.HouseBotRequestsToUsers.Count; i++)
 	{
-		var user = Settings?.HouseBotRequestsToUsers[i];
+		var user = Settings.HouseBotRequestsToUsers[i];
 
 		sb.AppendLine($"{i} - {user.ToString()}");
 	}
@@ -325,12 +336,15 @@ string GetRequestsToUsers()
 
 async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationToken)
 {
-	var user = Settings?.HouseBotRequestsToUsers[id];
+	var user = Settings.HouseBotRequestsToUsers[id];
 
-	Settings?.HouseBotUsers.Add(user);
-	Settings?.HouseBotRequestsToUsers.Remove(user);
+	if (user is null)
+		return "The user does not exist";
 
-	SaveSettings(Settings?.FilePath, Settings);
+	Settings.HouseBotUsers.Add(user);
+	Settings.HouseBotRequestsToUsers.Remove(user);
+
+	SaveSettings(Settings.FilePath, Settings);
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: user.Id,
@@ -343,12 +357,15 @@ async Task<string> AcceptRequestToUsers(int id, CancellationToken cancellationTo
 
 async Task<string> DeleteFromUsers(int id, CancellationToken cancellationToken)
 {
-	var user = Settings?.HouseBotUsers[id];
+	var user = Settings.HouseBotUsers[id];
 
-	Settings?.HouseBotUsers.Remove(user);
-	Settings?.HouseBotRequestsToUsers.Remove(user);
+	if (user is null)
+		return "The user does not exist";
 
-	SaveSettings(Settings?.FilePath, Settings);
+	Settings.HouseBotUsers.Remove(user);
+	Settings.HouseBotRequestsToUsers.Remove(user);
+
+	SaveSettings(Settings.FilePath, Settings);
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: user.Id,
@@ -361,15 +378,15 @@ async Task<string> DeleteFromUsers(int id, CancellationToken cancellationToken)
 
 string AddRequestToUsers(User user)
 {
-	if (Settings?.HouseBotUsers?.Contains(user) ?? false)
+	if (Settings.HouseBotUsers?.Contains(user) ?? false)
 		return "You are already a user";
 
-	if (Settings?.HouseBotRequestsToUsers?.Contains(user) ?? false)
+	if (Settings.HouseBotRequestsToUsers?.Contains(user) ?? false)
 		return "Request to user is already sended";
 
-	Settings?.HouseBotRequestsToUsers?.Add(user);
+	Settings.HouseBotRequestsToUsers?.Add(user);
 
-	SaveSettings(Settings?.FilePath, Settings);
+	SaveSettings(Settings.FilePath, Settings);
 
 	return "Request to user is sended";
 }
