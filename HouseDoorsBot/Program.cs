@@ -78,6 +78,8 @@ cts.Cancel();
 
 static Settings LoadSettings(string filePath)
 {
+	const string IfNullOrWhiteSpaceMessage = "This is null or whitespace";
+
 	if (!filePath.IsExistFile())
 	{
 		var newSettings = JsonSerializer.Serialize<Settings>(new());
@@ -93,14 +95,9 @@ static Settings LoadSettings(string filePath)
 	else
 		throw new FileNotFoundException(filePath);
 
-	if (string.IsNullOrWhiteSpace(settings.HouseApiUrl))
-		throw new InvalidDataException($"{nameof(settings.HouseApiUrl)} is null or whitespace => {filePath}");
-
-	if (string.IsNullOrWhiteSpace(settings.HouseAuthToken))
-		throw new InvalidDataException($"{nameof(settings.HouseAuthToken)} is null or whitespace => {filePath}");
-
-	if (string.IsNullOrWhiteSpace(settings.HouseBotAccessToken))
-		throw new InvalidDataException($"{nameof(settings.HouseBotAccessToken)} is null or whitespace => {filePath}");
+	settings.HouseApiUrl.ThrowIfNullOrWhiteSpace(nameof(settings.HouseApiUrl), $"{IfNullOrWhiteSpaceMessage} => {filePath}");
+	settings.HouseAuthToken.ThrowIfNullOrWhiteSpace(nameof(settings.HouseApiUrl), $"{IfNullOrWhiteSpaceMessage} => {filePath}");
+	settings.HouseBotAccessToken.ThrowIfNullOrWhiteSpace(nameof(settings.HouseApiUrl), $"{IfNullOrWhiteSpaceMessage} => {filePath}");
 
 	return settings;
 }
@@ -163,8 +160,8 @@ Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, 
 async Task<string> ExecuteCommandAsync(User user, string messageText, CancellationToken cancellationToken)
 {
 	const int FlatId = 451352;
-	const string commandNotExistMessage = "There is no such command";
-	const string incorrectCommandParameterMessage = "Incorrect command parameter";
+	const string CommandNotExistMessage = "There is no such command";
+	const string IncorrectCommandParameterMessage = "Incorrect command parameter";
 
 	var isAdmin = IsAdmin(user);
 	var isUser = IsUser(user);
@@ -190,7 +187,7 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 		if (adminCommand is Commands.GetRequestsToUsers)
 			return GetRequestsToUsers();
 
-		return commandNotExistMessage;
+		return CommandNotExistMessage;
 	}
 	else if ((isAdmin || isUser) && isExistUserCommand)
 	{
@@ -202,47 +199,47 @@ async Task<string> ExecuteCommandAsync(User user, string messageText, Cancellati
 		if (userCommand is Commands.GetChatId)
 			return $"Your ChatId is {user.Id}";
 
-		return commandNotExistMessage;
+		return CommandNotExistMessage;
 	}
 	else if (isExistGuestCommand)
 	{
 		if (guestCommand is Commands.RequestToUser)
 			return AddRequestToUsers(user);
 
-		return commandNotExistMessage;
+		return CommandNotExistMessage;
 	}
 	else if (isAdmin)
 	{
 		var message = messageText.Split(' ');
 
 		if (message.Length < 2)
-			return commandNotExistMessage;
+			return CommandNotExistMessage;
 
 		var command = message[0];
 		var parameter = message[1];
 		var isExistAdminParameterizedCommand = AdminParameterizedCommandsDictionary.TryGetValue(command, out var adminParameterizedCommand);
 
 		if (!isExistAdminParameterizedCommand)
-			return commandNotExistMessage;
+			return CommandNotExistMessage;
 
 		if (adminParameterizedCommand is Commands.AcceptRequestToUsers)
 		{
 			var isId = int.TryParse(parameter, out var id);
 
-			return isId ? await AcceptRequestToUsers(id, cancellationToken) : incorrectCommandParameterMessage;
+			return isId ? await AcceptRequestToUsers(id, cancellationToken) : IncorrectCommandParameterMessage;
 		}
 
 		if (adminParameterizedCommand is Commands.DeleteFromUsers)
 		{
 			var isId = int.TryParse(parameter, out var id);
 
-			return isId ? await DeleteFromUsers(id, cancellationToken) : incorrectCommandParameterMessage;
+			return isId ? await DeleteFromUsers(id, cancellationToken) : IncorrectCommandParameterMessage;
 		}
 
-		return commandNotExistMessage;
+		return CommandNotExistMessage;
 	}
 	else
-		return commandNotExistMessage;
+		return CommandNotExistMessage;
 }
 
 bool IsAdmin(User user) => Settings.HouseBotAdmins.Contains(user);
