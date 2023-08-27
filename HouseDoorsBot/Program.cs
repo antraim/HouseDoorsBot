@@ -12,8 +12,10 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
 const string SETTINGS_FILENAME = "Settings.json";
+const string LOGS_FILENAME = "Logs.txt";
 
 var settingsFilePath = Path.Combine(Environment.CurrentDirectory, SETTINGS_FILENAME);
+var logsFilePath = Path.Combine(Environment.CurrentDirectory, LOGS_FILENAME);
 
 var Settings = LoadSettings(settingsFilePath);
 
@@ -112,8 +114,25 @@ static void SaveSettings(string filePath, Settings settings)
 	System.IO.File.WriteAllText(filePath, updatedSettings);
 }
 
+static string BuildLog(User user, string userMessage, string botResult)
+{
+	var sb = new StringBuilder();
+
+	sb.AppendLine($"---------------------------------------------------------------");
+	sb.AppendLine($"DateTime => {DateTime.Now}");
+	sb.AppendLine($"User => {user}");
+	sb.AppendLine($"Message => {userMessage}");
+	sb.AppendLine($"Answer => {botResult}");
+	sb.AppendLine($"---------------------------------------------------------------");
+	sb.AppendLine();
+
+	return sb.ToString();
+}
+
 async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
 {
+	var logger = new Logger(logsFilePath);
+
 	if (update.Message is not { } message)
 		return;
 	if (message.Text is not { } messageText)
@@ -128,12 +147,9 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 	};
 
 	var result = await ExecuteCommandAsync(user, messageText, cancellationToken);
+	var log = BuildLog(user, messageText, result);
 
-	Console.WriteLine($"---------------------------------------------------------------");
-	Console.WriteLine($"User => \n{user}");
-	Console.WriteLine($"Message => \n{messageText}");
-	Console.WriteLine($"Answer => \n{result}");
-	Console.WriteLine($"---------------------------------------------------------------");
+	Console.WriteLine(log);
 
 	var sentMessage = await botClient.SendTextMessageAsync(
 		chatId: user.Id,
@@ -141,6 +157,8 @@ async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, Cancel
 		replyToMessageId: update.Message.MessageId,
 		allowSendingWithoutReply: true,
 		cancellationToken: cancellationToken);
+
+	logger.Log(log);
 }
 
 Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
@@ -486,6 +504,26 @@ interface IApi
 		[Authorize("Bearer")] string token,
 		[Header("X-Request-Id")] string requestId,
 		int flatId);
+}
+
+interface ILogger
+{
+	void Log(string text);
+}
+
+sealed class Logger : ILogger
+{
+	private readonly string _filePath;
+
+	public Logger(string filePath)
+	{
+		_filePath = filePath;
+	}
+
+	public void Log(string text)
+	{
+		System.IO.File.WriteAllText(_filePath, text);
+	}
 }
 
 static class TaskExtention
