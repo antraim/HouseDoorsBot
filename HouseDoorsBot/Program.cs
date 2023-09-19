@@ -522,7 +522,7 @@ sealed class Logger : ILogger
 
 	public void Log(string text)
 	{
-		System.IO.File.WriteAllText(_filePath, text);
+		System.IO.File.AppendAllText(_filePath, text);
 	}
 }
 
